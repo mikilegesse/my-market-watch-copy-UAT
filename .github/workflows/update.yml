@@ -2,9 +2,10 @@ name: Update Market Terminal
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
-  workflow_dispatch:
+    - cron: '*/30 * * * *'  # Runs every 30 minutes
+  workflow_dispatch:        # Allows manual run button
 
+# CRITICAL: This allows the robot to save files
 permissions:
   contents: write
 
@@ -13,25 +14,27 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: 1. Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: 2. Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install Libraries
-        run: pip install requests matplotlib
+      - name: 3. Install Libraries
+        run: |
+          pip install requests matplotlib
 
-      - name: Run Scanner
-        run: python main.py
+      - name: 4. Run Market Scanner
+        run: |
+          python main.py
 
-      - name: Save Changes
+      - name: 5. Save Results
         run: |
           git config --global user.name "NeonTraderBot"
           git config --global user.email "bot@github.com"
-          # WE ADD BOTH IMAGES HERE:
-          git add index.html etb_neon_terminal.png etb_light_terminal.png etb_history.csv
-          git commit -m "Auto-update" || echo "No changes to commit"
+          # We must add ALL generated files, including the new JSON state file
+          git add index.html etb_neon_terminal.png etb_history.csv price_state.json
+          git commit -m "📈 Auto-update: $(date)" || echo "No changes to commit"
           git push
