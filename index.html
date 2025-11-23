@@ -22,7 +22,6 @@
                 --border-hover: #00ff9d;
                 --table-hover: rgba(0, 255, 157, 0.05);
                 --shadow-color: rgba(0, 255, 157, 0.05);
-                --graph-img: url('etb_neon_terminal.png');
             }
 
             [data-theme="light"] {
@@ -39,7 +38,6 @@
                 --border-hover: #00a876;
                 --table-hover: rgba(0, 168, 118, 0.05);
                 --shadow-color: rgba(0, 0, 0, 0.1);
-                --graph-img: url('etb_light_terminal.png');
             }
 
             /* --- ANIMATIONS --- */
@@ -158,23 +156,47 @@
             /* --- GRAPH --- */
             .chart-container { 
                 margin-bottom: 40px; 
-                animation: fadeInUp 1s ease-out 0.3s backwards; 
+                animation: fadeInUp 1s ease-out 0.3s backwards;
+                perspective: 1000px;
             }
             .chart-wrapper {
                 position: relative;
                 width: 100%;
                 padding-bottom: 116.67%; /* 12:14 aspect ratio */
                 background: var(--bg-secondary);
-                border: 1px solid var(--border-color);
+                border: 2px solid var(--border-color);
                 border-radius: 15px;
                 overflow: hidden;
-                box-shadow: 0 0 20px var(--shadow-color);
-                transition: all 0.3s;
+                box-shadow: 0 5px 30px var(--shadow-color);
+                transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+                transform-style: preserve-3d;
             }
             .chart-wrapper:hover { 
                 border-color: var(--border-hover); 
-                box-shadow: 0 0 40px var(--shadow-color);
-                transform: scale(1.01);
+                box-shadow: 0 8px 50px var(--shadow-color), 0 0 60px var(--border-hover);
+                transform: translateY(-10px) scale(1.02);
+            }
+            .chart-wrapper::before {
+                content: '';
+                position: absolute;
+                top: -2px;
+                left: -2px;
+                right: -2px;
+                bottom: -2px;
+                background: linear-gradient(45deg, var(--text-primary), var(--accent-pink), var(--accent-blue), var(--text-primary));
+                background-size: 300% 300%;
+                border-radius: 15px;
+                opacity: 0;
+                transition: opacity 0.4s;
+                z-index: -1;
+                animation: gradientShift 3s ease infinite;
+            }
+            .chart-wrapper:hover::before {
+                opacity: 0.5;
+            }
+            @keyframes gradientShift {
+                0%, 100% { background-position: 0% 50%; }
+                50% { background-position: 100% 50%; }
             }
             .chart-wrapper img { 
                 position: absolute;
@@ -183,7 +205,29 @@
                 width: 100%;
                 height: 100%;
                 object-fit: cover;
-                content: var(--graph-img);
+                transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+            }
+            .chart-wrapper:hover img {
+                transform: scale(1.05);
+            }
+            .chart-wrapper .zoom-hint {
+                position: absolute;
+                bottom: 15px;
+                right: 15px;
+                background: rgba(0, 0, 0, 0.7);
+                color: var(--text-primary);
+                padding: 8px 15px;
+                border-radius: 20px;
+                font-size: 0.75rem;
+                opacity: 0;
+                transform: translateY(10px);
+                transition: all 0.3s;
+                pointer-events: none;
+                backdrop-filter: blur(10px);
+            }
+            .chart-wrapper:hover .zoom-hint {
+                opacity: 1;
+                transform: translateY(0);
             }
 
             /* --- DATA TABLE --- */
@@ -271,13 +315,14 @@
 
             <div class="ticker-card">
                 <div class="label">True USD Street Rate</div>
-                <div class="price">176.37 <span class="unit">ETB</span></div>
+                <div class="price">176.36 <span class="unit">ETB</span></div>
                 <div class="premium">Black Market Premium: +15.10%</div>
             </div>
 
             <div class="chart-container">
                 <div class="chart-wrapper">
                     <img src="etb_neon_terminal.png" alt="Market Analysis Chart" id="graphImage">
+                    <div class="zoom-hint">🔍 Hover to zoom</div>
                 </div>
             </div>
 
@@ -298,32 +343,32 @@
                         
             <tr>
                 <td style="font-weight: bold;" class="source-name">Binance</td>
-                <td>154.35</td>
+                <td>154.34</td>
+                <td>176.36</td>
+                <td class="median-cell">176.36</td>
+                <td>176.36</td>
                 <td>176.37</td>
-                <td class="median-cell">176.37</td>
-                <td>176.37</td>
-                <td>176.38</td>
-                <td>108</td>
+                <td>107</td>
             </tr>
             
             <tr>
                 <td style="font-weight: bold;" class="source-name">Bybit</td>
-                <td>130.10</td>
-                <td>143.99</td>
-                <td class="median-cell">157.04</td>
-                <td>168.14</td>
+                <td>130.09</td>
+                <td>141.66</td>
+                <td class="median-cell">155.58</td>
+                <td>168.13</td>
                 <td>169.55</td>
-                <td>44</td>
+                <td>40</td>
             </tr>
             
             <tr>
                 <td style="font-weight: bold;" class="source-name">MEXC</td>
                 <td>90.03</td>
-                <td>169.06</td>
-                <td class="median-cell">177.37</td>
-                <td>180.12</td>
-                <td>183.32</td>
-                <td>59</td>
+                <td>169.56</td>
+                <td class="median-cell">177.46</td>
+                <td>180.11</td>
+                <td>183.39</td>
+                <td>60</td>
             </tr>
             
                     </tbody>
@@ -336,11 +381,25 @@
             </div>
 
             <footer>
-                SYSTEM UPDATE: 2025-11-23 17:35:25 UTC | SOURCE PROTOCOLS: BINANCE, BYBIT, MEXC
+                SYSTEM UPDATE: 2025-11-23 18:12:05 UTC | SOURCE PROTOCOLS: BINANCE, BYBIT, MEXC
             </footer>
         </div>
 
         <script>
+            // Load saved theme IMMEDIATELY (before images load)
+            (function() {
+                const savedTheme = localStorage.getItem('theme') || 'dark';
+                document.documentElement.setAttribute('data-theme', savedTheme);
+                
+                // Set correct graph image immediately
+                const graphImage = document.getElementById('graphImage');
+                if (graphImage) {
+                    graphImage.src = savedTheme === 'light' 
+                        ? 'etb_light_terminal.png' 
+                        : 'etb_neon_terminal.png';
+                }
+            })();
+
             // Theme Toggle Logic
             function toggleTheme() {
                 const html = document.documentElement;
@@ -351,23 +410,41 @@
                 html.setAttribute('data-theme', newTheme);
                 localStorage.setItem('theme', newTheme);
                 
-                // Update graph image
-                if (newTheme === 'light') {
-                    graphImage.src = 'etb_light_terminal.png';
-                } else {
-                    graphImage.src = 'etb_neon_terminal.png';
+                // Update graph image with smooth transition
+                if (graphImage) {
+                    graphImage.style.opacity = '0.5';
+                    setTimeout(() => {
+                        graphImage.src = newTheme === 'light' 
+                            ? 'etb_light_terminal.png' 
+                            : 'etb_neon_terminal.png';
+                        graphImage.onload = () => {
+                            graphImage.style.opacity = '1';
+                        };
+                    }, 150);
                 }
             }
 
-            // Load saved theme
-            window.addEventListener('DOMContentLoaded', () => {
-                const savedTheme = localStorage.getItem('theme') || 'dark';
-                const graphImage = document.getElementById('graphImage');
-                
-                document.documentElement.setAttribute('data-theme', savedTheme);
-                
-                if (savedTheme === 'light') {
-                    graphImage.src = 'etb_light_terminal.png';
+            // Add tilt effect on mouse move
+            document.addEventListener('DOMContentLoaded', () => {
+                const chartWrapper = document.querySelector('.chart-wrapper');
+                if (chartWrapper) {
+                    chartWrapper.addEventListener('mousemove', (e) => {
+                        const rect = chartWrapper.getBoundingClientRect();
+                        const x = e.clientX - rect.left;
+                        const y = e.clientY - rect.top;
+                        
+                        const centerX = rect.width / 2;
+                        const centerY = rect.height / 2;
+                        
+                        const rotateX = (y - centerY) / 20;
+                        const rotateY = (centerX - x) / 20;
+                        
+                        chartWrapper.style.transform = `translateY(-10px) scale(1.02) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+                    });
+                    
+                    chartWrapper.addEventListener('mouseleave', () => {
+                        chartWrapper.style.transform = '';
+                    });
                 }
             });
         </script>
