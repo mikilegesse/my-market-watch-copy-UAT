@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v4.0 (The Complete Engine)
-- FEEDS: Binance (Direct), Bybit (Direct), MEXC (P2P.Army API)
-- MATH: Peg-Adjusted True USD Rates
-- VISUALS: Jittered Dot Plot + Historical Line Chart
-- WEB: Generates index.html for GitHub Pages
-- STORAGE: Auto-logs to etb_history.csv
+🇪🇹 ETB Financial Terminal v4.1 (Final Polish)
+- VISUALS: Neon Dot Plot (Top) + TradingView-Style Line Chart (Bottom)
+- WEB: Generates Cyberpunk index.html
+- DATA: Auto-logs to etb_history.csv
 """
 
 import requests
@@ -18,10 +16,11 @@ import datetime
 import random
 from concurrent.futures import ThreadPoolExecutor
 
-# Try importing matplotlib for graphing
+# Try importing matplotlib
 try:
     import matplotlib.pyplot as plt
     import matplotlib.dates as mdates
+    import matplotlib.ticker as ticker
     GRAPH_ENABLED = True
 except ImportError:
     GRAPH_ENABLED = False
@@ -38,9 +37,9 @@ HEADERS = {
     "Content-Type": "application/json"
 }
 
-# --- 1. WEB GENERATOR (The Face) ---
+# --- 1. WEB GENERATOR ---
 def update_website_html(stats, official, timestamp):
-    """ Generates a Cyberpunk HTML Dashboard for GitHub Pages """
+    """ Generates Cyberpunk HTML Dashboard """
     prem = ((stats['median'] - official)/official)*100 if official else 0
     
     html_content = f"""
@@ -49,7 +48,8 @@ def update_website_html(stats, official, timestamp):
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta http-equiv="refresh" content="300"> <title>ETB Neon Trader</title>
+        <meta http-equiv="refresh" content="300">
+        <title>ETB Neon Trader</title>
         <style>
             body {{ background-color: #050505; color: #00ff9d; font-family: 'Courier New', monospace; text-align: center; padding: 20px; }}
             .container {{ max-width: 1000px; margin: 0 auto; }}
@@ -70,9 +70,7 @@ def update_website_html(stats, official, timestamp):
                 <div class="price">{stats['median']} ETB</div>
                 <div class="premium">Black Market Premium: +{prem:.2f}%</div>
             </div>
-            
             <img src="{GRAPH_FILENAME}" alt="Market Analysis Chart">
-            
             <footer>
                 OFFICIAL BANK RATE: {official} ETB <br>
                 LAST UPDATED: {timestamp} UTC | SOURCE: Binance & MEXC P2P
@@ -86,7 +84,7 @@ def update_website_html(stats, official, timestamp):
         f.write(html_content)
     print(f"✅ Website ({HTML_FILENAME}) generated locally.")
 
-# --- 2. FETCHERS (The Hands) ---
+# --- 2. FETCHERS ---
 def fetch_official_rate():
     try:
         r = requests.get("https://open.er-api.com/v6/latest/USD", timeout=5)
@@ -151,13 +149,12 @@ def fetch_p2p_army_ads(market, side):
     except: pass
     return prices
 
-# --- 3. ANALYTICS (The Brain) ---
+# --- 3. ANALYTICS ---
 def analyze(prices, peg):
     if not prices: return None
     valid = sorted([p for p in prices if 50 < p < 400])
     if len(valid) < 2: return None
     
-    # Peg Adjustment (True USD)
     adj = [p / peg for p in valid]
     n = len(adj)
     
@@ -175,7 +172,7 @@ def analyze(prices, peg):
         "raw_data": adj, "count": n
     }
 
-# --- 4. HISTORY (The Memory) ---
+# --- 4. HISTORY ---
 def save_to_history(stats, official):
     file_exists = os.path.isfile(HISTORY_FILE)
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -197,23 +194,20 @@ def load_history():
             except: pass
     return d, m, q1, q3, off
 
-# --- 5. VISUALIZATION (The Artist) ---
+# --- 5. VISUALIZATION (Updated for TradingView Style) ---
 def generate_dashboard(stats, official_rate):
     if not GRAPH_ENABLED: return
     print(f"📊 Rendering Dashboard...", file=sys.stderr)
     
     plt.style.use('dark_background')
-    fig = plt.figure(figsize=(12, 12))
-    fig.suptitle(f'ETB LIQUIDITY SCANNER: {datetime.datetime.now().strftime("%H:%M")}', fontsize=20, color='#00ff9d', fontweight='bold', y=0.96)
+    fig = plt.figure(figsize=(12, 14)) # Taller figure
+    fig.suptitle(f'ETB LIQUIDITY SCANNER: {datetime.datetime.now().strftime("%H:%M")}', fontsize=20, color='#00ff9d', fontweight='bold', y=0.97)
 
     # --- TOP: JITTERED DOT PLOT ---
     ax1 = fig.add_subplot(2, 1, 1)
     data = stats['raw_data']
     
-    # Create Jitter
     y_jitter = [1 + random.uniform(-0.15, 0.15) for _ in data]
-    
-    # Plot Dots
     ax1.scatter(data, y_jitter, color='#00ff9d', alpha=0.6, s=25, label='Ad Price')
     
     # Laser Lines
@@ -226,7 +220,6 @@ def generate_dashboard(stats, official_rate):
     ax1.text(stats['q1'], 0.6, f"Q1\n{stats['q1']:.2f}", color='#00bfff', ha='center', fontsize=9)
     ax1.text(stats['q3'], 0.6, f"Q3\n{stats['q3']:.2f}", color='#00bfff', ha='center', fontsize=9)
 
-    # Official Rate Marker
     if official_rate:
         ax1.axvline(official_rate, color='white', linestyle=':', linewidth=1)
         ax1.text(official_rate, 0.6, f"Bank\n{official_rate:.0f}", color='white', ha='center', fontsize=9)
@@ -240,22 +233,34 @@ def generate_dashboard(stats, official_rate):
     ax1.set_yticks([]); ax1.set_xlabel("Price (ETB / True USD)")
     ax1.grid(True, axis='x', linestyle='--', alpha=0.15)
 
-    # --- BOTTOM: HISTORY LINE CHART ---
+    # --- BOTTOM: HISTORY LINE CHART (TradingView Style) ---
     ax2 = fig.add_subplot(2, 1, 2)
     dates, medians, q1s, q3s, offs = load_history()
     
     if len(dates) > 1:
-        # Green Ribbon
-        ax2.fill_between(dates, q1s, q3s, color='#00ff9d', alpha=0.15, label='Spread (Q1-Q3)')
-        # Lines
-        ax2.plot(dates, medians, color='#ff0055', linewidth=2.5, marker='o', markersize=5, label='Median Rate')
-        if any(offs): ax2.plot(dates, offs, color='white', linestyle=':', alpha=0.6, label='Official')
+        # Green Ribbon (Sharp)
+        ax2.fill_between(dates, q1s, q3s, color='#00ff9d', alpha=0.3, linewidth=0)
         
-        ax2.set_title("Historical Trend", color='white', loc='left')
-        ax2.legend(loc='upper left', frameon=False)
-        ax2.xaxis.set_major_formatter(mdates.DateFormatter('%m-%d %H:%M'))
-        plt.setp(ax2.xaxis.get_majorticklabels(), rotation=45, ha='right')
-        ax2.grid(True, linestyle='--', alpha=0.15)
+        # Median Line (Sharp Neon Red, No Markers)
+        ax2.plot(dates, medians, color='#ff0055', linewidth=2, label='Median Rate')
+        
+        if any(offs): 
+            ax2.plot(dates, offs, color='white', linestyle='--', linewidth=1, alpha=0.5, label='Official')
+            
+        ax2.set_title("Historical Trend", color='white', loc='left', pad=15)
+        
+        # X-Axis
+        ax2.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+        plt.setp(ax2.xaxis.get_majorticklabels(), rotation=0, ha='center', color='#888')
+        
+        # Y-Axis (Right Side)
+        ax2.yaxis.set_major_formatter(ticker.FormatStrFormatter('%.1f'))
+        ax2.yaxis.tick_right()
+        plt.setp(ax2.yaxis.get_majorticklabels(), color='#888')
+        
+        # Grid
+        ax2.grid(True, which='major', axis='both', linestyle='-', color='#222', linewidth=1)
+        ax2.set_facecolor('#0d0d0d')
     else:
         ax2.text(0.5, 0.5, "Building Time Series...\nRun again later to see line chart.", ha='center', va='center', color='gray')
 
@@ -268,7 +273,6 @@ def main():
     print("🔍 Initializing ETB Neon Trader...", file=sys.stderr)
     
     with ThreadPoolExecutor(max_workers=10) as ex:
-        # Fetch Data
         f_bin = ex.submit(lambda: fetch_binance("BUY") + fetch_binance("SELL"))
         f_byb = ex.submit(lambda: fetch_bybit("1") + fetch_bybit("0"))
         f_mexc = ex.submit(lambda: fetch_p2p_army_ads("mexc", "SELL"))
@@ -279,17 +283,14 @@ def main():
         official = f_off.result()
         peg = f_peg.result()
 
-    # Aggregate Data (Binance + MEXC for Visuals)
     visual_prices = data["Binance"] + data["MEXC"]
     visual_stats = analyze(visual_prices, peg)
     
-    # Save History & Generate Visuals
     if visual_stats: 
         save_to_history(visual_stats, official)
         generate_dashboard(visual_stats, official)
         update_website_html(visual_stats, official, time.strftime('%Y-%m-%d %H:%M:%S'))
 
-    # Print Console Report
     print("\n" + "="*120)
     print(f"🇪🇹  TRUE USD MARKET REPORT (Peg: ${peg:.4f})  |  {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*120)
