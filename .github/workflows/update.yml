@@ -3,36 +3,36 @@ name: Update Market Terminal
 on:
   schedule:
     - cron: '*/30 * * * *'  # Runs every 30 minutes
-  workflow_dispatch:        # Allows you to click "Run Now" manually
+  workflow_dispatch:        # Allows manual run
 
 permissions:
-  contents: write           # Permission to update the repo
+  contents: write           # Permission to save files
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: 1. Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: 2. Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install Dependencies
+      - name: 3. Install Libraries (Directly)
         run: |
-          pip install -r requirements.txt
+          pip install requests matplotlib
 
-      - name: Run Market Scanner
+      - name: 4. Run Market Scanner
         run: |
           python main.py
 
-      - name: Commit and Push Changes
+      - name: 5. Save & Push Results
         run: |
           git config --global user.name "NeonTraderBot"
           git config --global user.email "bot@github.com"
           git add index.html etb_neon_terminal.png etb_history.csv
-          git commit -m "📈 Auto-update: $(date)" || exit 0
+          git commit -m "📈 Auto-update: $(date)" || echo "No changes to commit"
           git push
