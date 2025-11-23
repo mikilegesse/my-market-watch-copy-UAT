@@ -17,260 +17,292 @@
                 --accent: #d63384; --link: #0d6efd; --gold: #ffc107;
                 --border: #ddd; --hover: rgba(0,0,0,0.05);
             }
-            body { background: var(--bg); color: var(--text); font-family: 'Courier New', monospace; margin: 0; padding: 20px; text-align: center; transition: 0.3s; }
+            body { background: var(--bg); color: var(--text); font-family: 'Courier New', monospace; margin: 0; padding: 20px; transition: 0.3s; }
             .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 2fr 1fr; gap: 20px; text-align: left; }
+            
             header { grid-column: span 2; text-align: center; margin-bottom: 20px; position: relative; }
             h1 { font-size: 2.5rem; margin: 0; text-shadow: 0 0 10px var(--text); }
-            .toggle { position: absolute; top: 0; right: 0; cursor: pointer; padding: 10px; border: 1px solid var(--border); border-radius: 20px; background: var(--card); }
+            .toggle { position: absolute; top: 0; right: 0; cursor: pointer; padding: 8px 16px; border: 1px solid var(--border); border-radius: 20px; background: var(--card); color: var(--sub); font-size: 0.8rem; }
+            
             .left-col { display: flex; flex-direction: column; gap: 20px; }
+            .right-col { display: flex; flex-direction: column; gap: 20px; }
+
             .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+            
             .ticker { text-align: center; padding: 30px; background: linear-gradient(145deg, var(--card), var(--bg)); }
             .price { font-size: 4rem; font-weight: bold; color: var(--sub); margin: 10px 0; }
-            .premium { color: var(--gold); border: 1px solid var(--gold); padding: 5px 15px; border-radius: 20px; display: inline-block; }
-            .chart img { width: 100%; border-radius: 8px; display: block; }
+            .prem { color: var(--gold); border: 1px solid var(--gold); padding: 4px 12px; border-radius: 20px; font-size: 0.9rem; }
+
+            .chart img { width: 100%; border-radius: 8px; display: block; border: 1px solid var(--border); }
+
             table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-            th { text-align: left; padding: 10px; border-bottom: 2px solid var(--border); color: var(--text); }
-            td { padding: 10px; border-bottom: 1px solid var(--border); color: var(--sub); }
-            tr:hover { background: var(--hover); }
-            .feed-title { font-size: 1.2rem; font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px; display: flex; align-items: center; gap: 10px; }
-            .feed-container { max-height: 600px; overflow-y: auto; padding-right: 5px; }
-            .feed-container::-webkit-scrollbar { width: 6px; }
-            .feed-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-            .feed-item { display: flex; gap: 15px; padding: 12px; border-bottom: 1px solid var(--border); align-items: center; transition: 0.2s; }
-            .feed-item:hover { background: var(--hover); transform: translateX(5px); }
-            .feed-icon { background: #2ea043; color: white; width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
-            .feed-details { display: flex; flex-direction: column; gap: 4px; }
-            .feed-time { font-size: 0.75rem; color: var(--mute); }
-            .feed-text { font-size: 0.9rem; color: var(--sub); line-height: 1.4; }
+            th { text-align: left; padding: 12px; border-bottom: 2px solid var(--border); color: var(--text); }
+            td { padding: 12px; border-bottom: 1px solid var(--border); color: var(--sub); }
+            .source-col { font-weight: bold; color: var(--text); }
+            .med-col { color: var(--accent); font-weight: bold; }
+
+            .feed-title { font-size: 1.1rem; font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 10px; color: var(--text); }
+            .feed-container { max-height: 600px; overflow-y: auto; }
+            .feed-item { display: flex; gap: 15px; padding: 12px 0; border-bottom: 1px solid var(--border); align-items: center; }
+            .feed-icon { width: 32px; height: 32px; background: #2ea043; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
+            .feed-info { display: flex; flex-direction: column; gap: 2px; }
+            .feed-meta { color: var(--mute); font-size: 0.75rem; }
+            .feed-desc { color: var(--sub); font-size: 0.85rem; }
             .feed-source { font-weight: bold; color: var(--text); }
-            .feed-price { color: var(--accent); font-weight: bold; }
-            .feed-amt { color: var(--link); }
-            @media (max-width: 900px) { .container { grid-template-columns: 1fr; } header { grid-column: span 1; } .price { font-size: 3rem; } .feed-container { max-height: 400px; } }
+            .feed-vol { font-weight: bold; color: var(--link); }
+            .feed-price { font-weight: bold; color: var(--accent); }
+
+            footer { grid-column: span 2; margin-top: 40px; text-align: center; color: var(--mute); font-size: 0.7rem; }
+            
+            @media (max-width: 900px) { .container { grid-template-columns: 1fr; } header, footer { grid-column: span 1; } .price { font-size: 3rem; } }
         </style>
     </head>
     <body>
         <div class="container">
             <header>
                 <h1>ETB MARKET INTELLIGENCE</h1>
+                <div style="color:var(--mute); letter-spacing:4px; font-size:0.8rem;">/// LIVE P2P LIQUIDITY SCANNER ///</div>
                 <div class="toggle" onclick="toggleTheme()">🌓 Theme</div>
             </header>
+
             <div class="left-col">
                 <div class="card ticker">
-                    <div style="letter-spacing: 2px; font-size: 0.9rem; color: var(--text);">TRUE USD STREET RATE</div>
-                    <div class="price">176.36 ETB</div>
-                    <div class="premium">Premium: +15.10%</div>
+                    <div style="color:var(--mute); font-size:0.8rem; letter-spacing:2px;">TRUE USD MEDIAN</div>
+                    <div class="price">176.36 <span style="font-size:1.5rem;color:var(--mute)">ETB</span></div>
+                    <span class="prem">Premium: +15.10%</span>
                 </div>
+
                 <div class="card chart">
-                    <img src="etb_neon_terminal.png?v=1763923568" id="chartImg" alt="Graph">
+                    <img src="etb_neon_terminal.png?v=1763924388" id="chartImg" alt="Market Chart">
                 </div>
+
                 <div class="card">
                     <table>
                         <thead><tr><th>Source</th><th>Min</th><th>Q1</th><th>Med</th><th>Q3</th><th>Max</th><th>Ads</th></tr></thead>
-                        <tbody><tr><td style='font-weight:bold;color:var(--text-secondary)'>Binance</td><td>176.19</td><td>176.36</td><td style='color:var(--accent-pink);font-weight:bold'>176.36</td><td>176.36</td><td>176.37</td><td>100</td></tr><tr><td style='font-weight:bold;color:var(--text-secondary)'>Bybit</td><td>130.09</td><td>141.62</td><td style='color:var(--accent-pink);font-weight:bold'>154.45</td><td>168.02</td><td>169.55</td><td>42</td></tr><tr><td style='font-weight:bold;color:var(--text-secondary)'>MEXC</td><td>90.03</td><td>170.06</td><td style='color:var(--accent-pink);font-weight:bold'>177.56</td><td>180.11</td><td>183.56</td><td>57</td></tr></tbody>
+                        <tbody><tr><td class='source-col'>Binance</td><td>176.19</td><td>176.36</td><td class='med-col'>176.36</td><td>176.36</td><td>176.37</td><td>100</td></tr><tr><td class='source-col'>Bybit</td><td>130.10</td><td>141.64</td><td class='med-col'>153.85</td><td>168.14</td><td>169.55</td><td>39</td></tr><tr><td class='source-col'>MEXC</td><td>90.03</td><td>170.06</td><td class='med-col'>177.36</td><td>180.11</td><td>183.33</td><td>57</td></tr></tbody>
                     </table>
                 </div>
-                <div style="text-align: center; font-size: 0.8rem; color: var(--mute); padding: 20px;">
-                    Official Bank Rate: 153.23 ETB | Last Update: 18:46 UTC UTC
-                </div>
             </div>
+
             <div class="right-col">
                 <div class="card">
                     <div class="feed-title">👀 Top Live Offers</div>
                     <div class="feed-container">
                         
-        <div class="feed-item">
-            <div class="feed-icon">🛒</div>
-            <div class="feed-details">
-                <div class="feed-time">18:46</div>
-                <div class="feed-text">
-                    <span class="feed-source">MEXC Merchant</span> is selling 
-                    <span class="feed-amt">967 USDT</span> at 
-                    <span class="feed-price">90.03 ETB</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div class="feed-icon">🛒</div>
-            <div class="feed-details">
-                <div class="feed-time">18:46</div>
-                <div class="feed-text">
-                    <span class="feed-source">MEXC Merchant</span> is selling 
-                    <span class="feed-amt">1622 USDT</span> at 
-                    <span class="feed-price">130.04 ETB</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div class="feed-icon">🛒</div>
-            <div class="feed-details">
-                <div class="feed-time">18:46</div>
-                <div class="feed-text">
-                    <span class="feed-source">Bybit Merchant</span> is selling 
-                    <span class="feed-amt">240 USDT</span> at 
-                    <span class="feed-price">130.09 ETB</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div class="feed-icon">🛒</div>
-            <div class="feed-details">
-                <div class="feed-time">18:46</div>
-                <div class="feed-text">
-                    <span class="feed-source">Bybit Merchant</span> is selling 
-                    <span class="feed-amt">1825 USDT</span> at 
-                    <span class="feed-price">131.14 ETB</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div class="feed-icon">🛒</div>
-            <div class="feed-details">
-                <div class="feed-time">18:46</div>
-                <div class="feed-text">
-                    <span class="feed-source">Bybit Merchant</span> is selling 
-                    <span class="feed-amt">1364 USDT</span> at 
-                    <span class="feed-price">131.69 ETB</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div class="feed-icon">🛒</div>
-            <div class="feed-details">
-                <div class="feed-time">18:46</div>
-                <div class="feed-text">
-                    <span class="feed-source">Bybit Merchant</span> is selling 
-                    <span class="feed-amt">278 USDT</span> at 
-                    <span class="feed-price">135.04 ETB</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div class="feed-icon">🛒</div>
-            <div class="feed-details">
-                <div class="feed-time">18:46</div>
-                <div class="feed-text">
-                    <span class="feed-source">Bybit Merchant</span> is selling 
-                    <span class="feed-amt">1913 USDT</span> at 
-                    <span class="feed-price">135.05 ETB</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div class="feed-icon">🛒</div>
-            <div class="feed-details">
-                <div class="feed-time">18:46</div>
-                <div class="feed-text">
-                    <span class="feed-source">Bybit Merchant</span> is selling 
-                    <span class="feed-amt">161 USDT</span> at 
-                    <span class="feed-price">135.07 ETB</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div class="feed-icon">🛒</div>
-            <div class="feed-details">
-                <div class="feed-time">18:46</div>
-                <div class="feed-text">
-                    <span class="feed-source">Bybit Merchant</span> is selling 
-                    <span class="feed-amt">216 USDT</span> at 
-                    <span class="feed-price">135.24 ETB</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div class="feed-icon">🛒</div>
-            <div class="feed-details">
-                <div class="feed-time">18:46</div>
-                <div class="feed-text">
-                    <span class="feed-source">Bybit Merchant</span> is selling 
-                    <span class="feed-amt">542 USDT</span> at 
-                    <span class="feed-price">140.05 ETB</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div class="feed-icon">🛒</div>
-            <div class="feed-details">
-                <div class="feed-time">18:46</div>
-                <div class="feed-text">
-                    <span class="feed-source">MEXC Merchant</span> is selling 
-                    <span class="feed-amt">1610 USDT</span> at 
-                    <span class="feed-price">140.05 ETB</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div class="feed-icon">🛒</div>
-            <div class="feed-details">
-                <div class="feed-time">18:46</div>
-                <div class="feed-text">
-                    <span class="feed-source">Bybit Merchant</span> is selling 
-                    <span class="feed-amt">936 USDT</span> at 
-                    <span class="feed-price">140.08 ETB</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div class="feed-icon">🛒</div>
-            <div class="feed-details">
-                <div class="feed-time">18:46</div>
-                <div class="feed-text">
-                    <span class="feed-source">Bybit Merchant</span> is selling 
-                    <span class="feed-amt">1242 USDT</span> at 
-                    <span class="feed-price">141.54 ETB</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div class="feed-icon">🛒</div>
-            <div class="feed-details">
-                <div class="feed-time">18:46</div>
-                <div class="feed-text">
-                    <span class="feed-source">MEXC Merchant</span> is selling 
-                    <span class="feed-amt">1427 USDT</span> at 
-                    <span class="feed-price">141.58 ETB</span>
-                </div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div class="feed-icon">🛒</div>
-            <div class="feed-details">
-                <div class="feed-time">18:46</div>
-                <div class="feed-text">
-                    <span class="feed-source">Bybit Merchant</span> is selling 
-                    <span class="feed-amt">1558 USDT</span> at 
-                    <span class="feed-price">141.60 ETB</span>
-                </div>
-            </div>
-        </div>
-        
+            <div class="feed-item">
+                <div class="feed-icon">🛒</div>
+                <div class="feed-info">
+                    <div class="feed-meta">18:58</div>
+                    <div class="feed-desc">
+                        <span class="feed-source">MEXC Merchant</span> is selling 
+                        <span class="feed-vol">3091 USDT</span> at 
+                        <span class="feed-price">160.06 ETB</span>
                     </div>
                 </div>
             </div>
+            
+
+            <div class="feed-item">
+                <div class="feed-icon">🛒</div>
+                <div class="feed-info">
+                    <div class="feed-meta">18:56</div>
+                    <div class="feed-desc">
+                        <span class="feed-source">MEXC Merchant</span> is selling 
+                        <span class="feed-vol">1557 USDT</span> at 
+                        <span class="feed-price">160.06 ETB</span>
+                    </div>
+                </div>
+            </div>
+            
+
+            <div class="feed-item">
+                <div class="feed-icon">🛒</div>
+                <div class="feed-info">
+                    <div class="feed-meta">18:56</div>
+                    <div class="feed-desc">
+                        <span class="feed-source">Bybit Merchant</span> is selling 
+                        <span class="feed-vol">2061 USDT</span> at 
+                        <span class="feed-price">160.37 ETB</span>
+                    </div>
+                </div>
+            </div>
+            
+
+            <div class="feed-item">
+                <div class="feed-icon">🛒</div>
+                <div class="feed-info">
+                    <div class="feed-meta">18:55</div>
+                    <div class="feed-desc">
+                        <span class="feed-source">MEXC Merchant</span> is selling 
+                        <span class="feed-vol">3029 USDT</span> at 
+                        <span class="feed-price">163.06 ETB</span>
+                    </div>
+                </div>
+            </div>
+            
+
+            <div class="feed-item">
+                <div class="feed-icon">🛒</div>
+                <div class="feed-info">
+                    <div class="feed-meta">18:55</div>
+                    <div class="feed-desc">
+                        <span class="feed-source">MEXC Merchant</span> is selling 
+                        <span class="feed-vol">2801 USDT</span> at 
+                        <span class="feed-price">164.68 ETB</span>
+                    </div>
+                </div>
+            </div>
+            
+
+            <div class="feed-item">
+                <div class="feed-icon">🛒</div>
+                <div class="feed-info">
+                    <div class="feed-meta">18:58</div>
+                    <div class="feed-desc">
+                        <span class="feed-source">Bybit Merchant</span> is selling 
+                        <span class="feed-vol">1941 USDT</span> at 
+                        <span class="feed-price">167.70 ETB</span>
+                    </div>
+                </div>
+            </div>
+            
+
+            <div class="feed-item">
+                <div class="feed-icon">🛒</div>
+                <div class="feed-info">
+                    <div class="feed-meta">18:53</div>
+                    <div class="feed-desc">
+                        <span class="feed-source">Bybit Merchant</span> is selling 
+                        <span class="feed-vol">4235 USDT</span> at 
+                        <span class="feed-price">167.70 ETB</span>
+                    </div>
+                </div>
+            </div>
+            
+
+            <div class="feed-item">
+                <div class="feed-icon">🛒</div>
+                <div class="feed-info">
+                    <div class="feed-meta">18:53</div>
+                    <div class="feed-desc">
+                        <span class="feed-source">Bybit Merchant</span> is selling 
+                        <span class="feed-vol">3933 USDT</span> at 
+                        <span class="feed-price">167.70 ETB</span>
+                    </div>
+                </div>
+            </div>
+            
+
+            <div class="feed-item">
+                <div class="feed-icon">🛒</div>
+                <div class="feed-info">
+                    <div class="feed-meta">18:58</div>
+                    <div class="feed-desc">
+                        <span class="feed-source">Bybit Merchant</span> is selling 
+                        <span class="feed-vol">3092 USDT</span> at 
+                        <span class="feed-price">167.70 ETB</span>
+                    </div>
+                </div>
+            </div>
+            
+
+            <div class="feed-item">
+                <div class="feed-icon">🛒</div>
+                <div class="feed-info">
+                    <div class="feed-meta">18:55</div>
+                    <div class="feed-desc">
+                        <span class="feed-source">MEXC Merchant</span> is selling 
+                        <span class="feed-vol">1079 USDT</span> at 
+                        <span class="feed-price">168.06 ETB</span>
+                    </div>
+                </div>
+            </div>
+            
+
+            <div class="feed-item">
+                <div class="feed-icon">🛒</div>
+                <div class="feed-info">
+                    <div class="feed-meta">18:54</div>
+                    <div class="feed-desc">
+                        <span class="feed-source">Bybit Merchant</span> is selling 
+                        <span class="feed-vol">4755 USDT</span> at 
+                        <span class="feed-price">168.13 ETB</span>
+                    </div>
+                </div>
+            </div>
+            
+
+            <div class="feed-item">
+                <div class="feed-icon">🛒</div>
+                <div class="feed-info">
+                    <div class="feed-meta">18:54</div>
+                    <div class="feed-desc">
+                        <span class="feed-source">Bybit Merchant</span> is selling 
+                        <span class="feed-vol">2037 USDT</span> at 
+                        <span class="feed-price">168.16 ETB</span>
+                    </div>
+                </div>
+            </div>
+            
+
+            <div class="feed-item">
+                <div class="feed-icon">🛒</div>
+                <div class="feed-info">
+                    <div class="feed-meta">18:53</div>
+                    <div class="feed-desc">
+                        <span class="feed-source">Bybit Merchant</span> is selling 
+                        <span class="feed-vol">3530 USDT</span> at 
+                        <span class="feed-price">169.55 ETB</span>
+                    </div>
+                </div>
+            </div>
+            
+
+            <div class="feed-item">
+                <div class="feed-icon">🛒</div>
+                <div class="feed-info">
+                    <div class="feed-meta">18:56</div>
+                    <div class="feed-desc">
+                        <span class="feed-source">Bybit Merchant</span> is selling 
+                        <span class="feed-vol">766 USDT</span> at 
+                        <span class="feed-price">169.55 ETB</span>
+                    </div>
+                </div>
+            </div>
+            
+
+            <div class="feed-item">
+                <div class="feed-icon">🛒</div>
+                <div class="feed-info">
+                    <div class="feed-meta">18:56</div>
+                    <div class="feed-desc">
+                        <span class="feed-source">Bybit Merchant</span> is selling 
+                        <span class="feed-vol">2463 USDT</span> at 
+                        <span class="feed-price">169.55 ETB</span>
+                    </div>
+                </div>
+            </div>
+            
+                    </div>
+                </div>
+            </div>
+
+            <footer>
+                Official Bank Rate: 153.23 ETB | Last Update: 2025-11-23 18:59:48 UTC
+            </footer>
         </div>
+
         <script>
-            const imgDark = "etb_neon_terminal.png?v=1763923568";
-            const imgLight = "etb_light_terminal.png?v=1763923568";
+            const imgDark = "etb_neon_terminal.png?v=1763924388";
+            const imgLight = "etb_light_terminal.png?v=1763924388";
             const html = document.documentElement;
+            
             (function() {
                 const theme = localStorage.getItem('theme') || 'dark';
                 html.setAttribute('data-theme', theme);
                 document.getElementById('chartImg').src = theme === 'light' ? imgLight : imgDark;
             })();
+
             function toggleTheme() {
                 const current = html.getAttribute('data-theme');
                 const next = current === 'light' ? 'dark' : 'light';
