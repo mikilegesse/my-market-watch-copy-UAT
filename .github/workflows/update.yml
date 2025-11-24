@@ -15,6 +15,9 @@ jobs:
     steps:
       - name: 1. Checkout Code
         uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
       
       - name: 2. Setup Python
         uses: actions/setup-python@v5
@@ -27,19 +30,64 @@ jobs:
       - name: 4. Run Market Scanner
         run: python main.py
       
-      - name: 5. Save Results
+      - name: 5. Commit & Push (Bulletproof)
         run: |
           git config --global user.name "NeonTraderBot"
           git config --global user.email "bot@github.com"
           
-          # ✅ FIX: Pull before pushing to avoid conflicts
-          git pull --rebase origin main || echo "Nothing to pull"
+          # Fetch latest to see if there are changes
+          git fetch origin main
           
-          # Add all changes
-          git add .
+          # Add only the generated files (not main.py!)
+          git add -f \
+            etb_history.csv \
+            etb_light_terminal.png \
+            etb_neon_terminal.png \
+            index.html \
+            recent_trades.json \
+            market_state.json \
+            2>/dev/null || true
           
-          # Commit only if there are changes
-          git diff --quiet && git diff --staged --quiet || git commit -m "📈 Auto-update: $(date)"
+          # Check if there are any changes to commit
+          if git diff --staged --quiet; then
+            echo "✅ No changes to commit"
+            exit 0
+          fi
           
-          # Push with retry logic
-          git push || (git pull --rebase origin main && git push)
+          # Commit the changes
+          git commit -m "📈 Auto-update: $(date +"%Y-%m-%d %H:%M:%S UTC")"
+          
+          # Try to push (with retry logic)
+          for attempt in {1..5}; do
+            if git push origin main; then
+              echo "✅ Push successful on attempt $attempt"
+              exit 0
+            fi
+            
+            echo "⚠️ Push failed (attempt $attempt/5)"
+            
+            # Pull and rebase
+            git pull --rebase origin main --strategy-option=theirs || {
+              echo "⚠️ Rebase failed, resolving conflicts..."
+              
+              # For conflicts in generated files, always use our version
+              for file in etb_history.csv etb_light_terminal.png etb_neon_terminal.png index.html recent_trades.json market_state.json; do
+                if git ls-files -u | grep -q "$file"; then
+                  git checkout --ours "$file"
+                  git add "$file"
+                fi
+              done
+              
+              # Continue rebase
+              git rebase --continue || {
+                echo "❌ Cannot resolve conflicts, aborting"
+                git rebase --abort
+                exit 1
+              }
+            }
+            
+            sleep 2
+          done
+          
+          echo "❌ Failed to push after 5 attempts"
+          exit 1
