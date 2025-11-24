@@ -2,8 +2,8 @@ name: Update Market Terminal
 
 on:
   schedule:
-    - cron: '*/30 * * * *'
-  workflow_dispatch:
+    - cron: '*/5 * * * *'  # Runs every 5 minutes
+  workflow_dispatch:        # Allows you to click "Run Now"
 
 permissions:
   contents: write
@@ -13,25 +13,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: 1. Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: 2. Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install Libraries
-        run: pip install requests matplotlib
+      - name: 3. Install Libraries
+        # Added --break-system-packages to bypass Ubuntu 24.04 restrictions if they occur
+        run: pip install requests matplotlib --break-system-packages
 
-      - name: Run Scanner
+      - name: 4. Run Market Scanner
         run: python main.py
 
-      - name: Save Changes
+      - name: 5. Save Results
         run: |
           git config --global user.name "NeonTraderBot"
           git config --global user.email "bot@github.com"
-          # WE ADD BOTH IMAGES HERE:
-          git add index.html etb_neon_terminal.png etb_light_terminal.png etb_history.csv
-          git commit -m "Auto-update" || echo "No changes to commit"
+          
+          # UNIVERSAL FIX: "git add ." adds all changes safely
+          # It won't crash if a specific image is missing
+          git add .
+          
+          # Commit only if there are changes
+          git commit -m "📈 Auto-update: $(date)" || echo "No changes to commit"
           git push
