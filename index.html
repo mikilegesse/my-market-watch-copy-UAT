@@ -6,7 +6,7 @@
         <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="refresh" content="300">
-        <title>ETB Market Watch v30.4</title>
+        <title>ETB Market Watch v30.6</title>
         <style>
             :root { --bg: #050505; --card: #111; --text: #00ff9d; --sub: #ccc; --mute: #666; --accent: #ff0055; --link: #00bfff; --gold: #ffcc00; --border: #333; }
             [data-theme="light"] { --bg: #f4f4f9; --card: #fff; --text: #1a1a1a; --sub: #333; --mute: #888; --accent: #d63384; --link: #0d6efd; --gold: #ffc107; --border: #ddd; }
@@ -50,45 +50,43 @@
         <div class="container">
             <header>
                 <h1>ETB MARKET INTELLIGENCE</h1>
-                <div style="color:var(--mute); letter-spacing:4px; font-size:0.8rem;">/// REAL-TIME P2P TRACKER (15min window) ///</div>
+                <div style="color:var(--mute); letter-spacing:4px; font-size:0.8rem;">/// BURST SCAN TAPE READER (60s window) ///</div>
                 <div class="toggle" onclick="toggleTheme()">🌓 Theme</div>
             </header>
 
             <div class="left-col">
                 <div class="card ticker">
                     <div style="color:var(--mute); font-size:0.8rem; letter-spacing:2px;">TRUE USD MEDIAN</div>
-                    <div class="price">176.36 <span style="font-size:1.5rem;color:var(--mute)">ETB</span></div>
-                    <span class="prem">Black Market Premium: +15.06%</span>
+                    <div class="price">170.08 <span style="font-size:1.5rem;color:var(--mute)">ETB</span></div>
+                    <span class="prem">Black Market Premium: +10.96%</span>
                 </div>
                 <div class="card chart">
-                    <img src="etb_neon_terminal.png?v=1764004865" id="chartImg" alt="Market Chart">
+                    <img src="etb_neon_terminal.png?v=1764005040" id="chartImg" alt="Market Chart">
                 </div>
                 <div class="card">
                     <table>
-                        <thead>
-                            <tr><th>Source</th><th>Min</th><th>Q1</th><th>Med</th><th>Q3</th><th>Max</th><th>Ads</th></tr>
-                        </thead>
-                        <tbody><tr><td class='source-col'>Binance</td><td>175.62</td><td>176.35</td><td class='med-col'>176.36</td><td>176.36</td><td>176.37</td><td>100</td></tr><tr><td>Bybit</td><td colspan='6' style='opacity:0.5'>No Data</td></tr><tr><td class='source-col'>MEXC</td><td>90.03</td><td>164.68</td><td class='med-col'>177.76</td><td>181.16</td><td>183.07</td><td>49</td></tr></tbody>
+                        <thead><tr><th>Source</th><th>Min</th><th>Q1</th><th>Med</th><th>Q3</th><th>Max</th><th>Ads</th></tr></thead>
+                        <tbody><tr><td class='source-col'>Binance</td><td>27.01</td><td>159.64</td><td class='med-col'>169.87</td><td>174.69</td><td>176.39</td><td>814</td></tr><tr><td>Bybit</td><td colspan='6' style='opacity:0.5'>No Data</td></tr><tr><td class='source-col'>MEXC</td><td>90.04</td><td>166.04</td><td class='med-col'>177.93</td><td>181.64</td><td>183.09</td><td>50</td></tr></tbody>
                     </table>
                 </div>
             </div>
 
             <div class="right-col">
                 <div class="card">
-                    <div class="feed-title">🟡 Binance | 🔵 MEXC | Real Trades (Last 15min)</div>
-                    <div class="feed-container"><div class='feed-item' style='color:#888'>⏳ No trades detected in last 15 minutes. Trades will appear here when inventory drops are detected between GitHub Actions runs.</div></div>
+                    <div class="feed-title">🟡 Binance | 🔵 MEXC | ⚫ Bybit | Real Trades (60s)</div>
+                    <div class="feed-container"><div class='feed-item' style='color:#888'>⏳ No trades detected in 60s burst window (Market quiet or first run).</div></div>
                 </div>
             </div>
 
             <footer>
-                Official Bank Rate: 153.28 ETB | Last Update: 2025-11-24 17:21:05 UTC | 
-                🔄 Updates every 5min via GitHub Actions
+                Official Bank Rate: 153.28 ETB | Last Update: 2025-11-24 17:24:00 UTC | 
+                🔄 Burst Scan: 2 snapshots 60s apart
             </footer>
         </div>
 
         <script>
-            const imgDark = "etb_neon_terminal.png?v=1764004865";
-            const imgLight = "etb_light_terminal.png?v=1764004865";
+            const imgDark = "etb_neon_terminal.png?v=1764005040";
+            const imgLight = "etb_light_terminal.png?v=1764005040";
             const html = document.documentElement;
             
             (function() {
@@ -96,7 +94,7 @@
                 html.setAttribute('data-theme', theme);
                 document.getElementById('chartImg').src = theme === 'light' ? imgLight : imgDark;
             })();
-            
+
             function toggleTheme() {
                 const current = html.getAttribute('data-theme');
                 const next = current === 'light' ? 'dark' : 'light';
