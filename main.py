@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v30.1 (Hotfix)
-- FIX: Corrected SyntaxError on line 155 (split try/with block).
-- DATA: "The Harvester" Logic (Aggressive Scraping + Real Inventory Tracking).
-- VISUAL: Smart Zoom Graph + P2P.Army API Integration.
+🇪🇹 ETB Financial Terminal v30.2 (MEXC Fix + No-Bybit History)
+- DATA: MEXC grouping fixed (now shows correctly in the table).
+- HISTORY: Global stats & history use ONLY Binance + MEXC (Bybit excluded).
+- VISUAL: Min/Max corrected via sorted prices in analytics.
+- CORE: Keeps Tape Reader, Smart Zoom, Light/Dark UI.
 """
 
 import requests
@@ -34,7 +35,10 @@ SNAPSHOT_FILE = "market_state.json"
 GRAPH_FILENAME = "etb_neon_terminal.png"
 GRAPH_LIGHT_FILENAME = "etb_light_terminal.png"
 HTML_FILENAME = "index.html"
-BURST_WAIT_TIME = 30 # Seconds to wait to detect sales
+BURST_WAIT_TIME = 30  # Seconds to wait to detect sales
+
+# 5-minute cron → 12 points/hour → 24h ≈ 288 points
+HISTORY_POINTS = 288
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -44,265 +48,459 @@ HEADERS = {
 
 # --- 1. FETCHERS (UNLIMITED DEPTH) ---
 def fetch_official_rate():
-    try: return float(requests.get("https://open.er-api.com/v6/latest/USD", timeout=5).json()["rates"]["ETB"])
-    except: return None
+    try:
+        return float(requests.get("https://open.er-api.com/v6/latest/USD", timeout=5).json()["rates"]["ETB"])
+    except Exception:
+        return None
+
 
 def fetch_usdt_peg():
-    try: return float(requests.get("https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=usd", timeout=5).json()["tether"]["usd"])
-    except: return 1.00
+    try:
+        return float(
+            requests.get(
+                "https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=usd",
+                timeout=5
+            ).json()["tether"]["usd"]
+        )
+    except Exception:
+        return 1.00
 
-def fetch_binance_direct(trade_type):
-    """ Fallback: Scrape Binance directly if API fails """
+
+def fetch_binance_direct(trade_type: str):
+    """Fallback: Scrape Binance directly if P2P.Army API fails."""
     url = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
     ads = []
     page = 1
-    payload = {"asset": "USDT", "fiat": "ETB", "merchantCheck": False, "page": 1, "rows": 20, "tradeType": trade_type, "payTypes": [], "countries": [], "publisherType": None}
-    
+    payload = {
+        "asset": "USDT",
+        "fiat": "ETB",
+        "merchantCheck": False,
+        "page": 1,
+        "rows": 20,
+        "tradeType": trade_type,
+        "payTypes": [],
+        "countries": [],
+        "publisherType": None
+    }
+
     while True:
         try:
             payload["page"] = page
             r = requests.post(url, headers=HEADERS, json=payload, timeout=5)
-            data = r.json().get('data', [])
-            if not data: break
-            
+            data = r.json().get("data", [])
+            if not data:
+                break
+
             for d in data:
-                adv = d.get('adv', {})
+                adv = d.get("adv", {})
                 ads.append({
-                    'source': 'Binance',
-                    'advertiser': d.get('advertiser', {}).get('nickName', 'Binance User'),
-                    'price': float(adv.get('price')),
-                    'available': float(adv.get('surplusAmount', 0)),
-                    'min': float(adv.get('minSingleTransAmount', 0)),
-                    'max': float(adv.get('maxSingleTransAmount', 0))
+                    "source": "Binance",
+                    "advertiser": d.get("advertiser", {}).get("nickName", "Binance User"),
+                    "price": float(adv.get("price")),
+                    "available": float(adv.get("surplusAmount", 0)),
+                    "min": float(adv.get("minSingleTransAmount", 0)),
+                    "max": float(adv.get("maxSingleTransAmount", 0))
                 })
-            if page >= 10: break # Max 200 ads
-            page += 1; time.sleep(0.2)
-        except: break
+            if page >= 10:  # Max 200 ads
+                break
+            page += 1
+            time.sleep(0.2)
+        except Exception:
+            break
     return ads
 
-def fetch_bybit(side):
-    """ Scrapes Bybit pages until empty (Get Everything) """
+
+def fetch_bybit(side: str):
+    """Scrapes Bybit OTC (used for tape & table, but excluded from history)."""
     url = "https://api2.bybit.com/fiat/otc/item/online"
     ads = []
     page = 1
-    h = HEADERS.copy(); h["Referer"] = "https://www.bybit.com/"
-    
+    h = HEADERS.copy()
+    h["Referer"] = "https://www.bybit.com/"
+
     while True:
         try:
-            r = requests.post(url, headers=h, json={"userId":"","tokenId":"USDT","currencyId":"ETB","payment":[],"side":side,"size":"50","page":str(page),"authMaker":False}, timeout=5)
+            r = requests.post(
+                url,
+                headers=h,
+                json={
+                    "userId": "",
+                    "tokenId": "USDT",
+                    "currencyId": "ETB",
+                    "payment": [],
+                    "side": side,
+                    "size": "50",
+                    "page": str(page),
+                    "authMaker": False
+                },
+                timeout=5
+            )
             items = r.json().get("result", {}).get("items", [])
-            if not items: break
-            
+            if not items:
+                break
+
             for i in items:
                 ads.append({
-                    'source': 'Bybit',
-                    'advertiser': i.get('nickName', 'Bybit User'),
-                    'price': float(i.get('price')),
-                    'available': float(i.get('lastQuantity', 0)),
-                    'min': float(i.get('minAmount', 0)),
-                    'max': float(i.get('maxAmount', 0))
+                    "source": "Bybit",
+                    "advertiser": i.get("nickName", "Bybit User"),
+                    "price": float(i.get("price")),
+                    "available": float(i.get("lastQuantity", 0)),
+                    "min": float(i.get("minAmount", 0)),
+                    "max": float(i.get("maxAmount", 0))
                 })
-            if page >= 10: break 
-            page += 1; time.sleep(0.1)
-        except: break
+            if page >= 10:
+                break
+            page += 1
+            time.sleep(0.1)
+        except Exception:
+            break
     return ads
 
-def fetch_p2p_army_ads(market, side):
-    """ Uses your API Key for MEXC/Binance """
+
+def fetch_p2p_army_ads(market: str, side: str):
+    """
+    Uses your P2P.Army API key for Binance & MEXC.
+    Ensures 'source' names match grouped keys: 'Binance' and 'MEXC'.
+    """
     url = "https://p2p.army/v1/api/get_p2p_order_book"
-    h = HEADERS.copy(); h["X-APIKEY"] = P2P_ARMY_KEY
+    h = HEADERS.copy()
+    h["X-APIKEY"] = P2P_ARMY_KEY
+
     try:
-        r = requests.post(url, headers=h, json={"market":market,"fiat":"ETB","asset":"USDT","side":side,"limit":100}, timeout=10)
+        r = requests.post(
+            url,
+            headers=h,
+            json={"market": market, "fiat": "ETB", "asset": "USDT", "side": side, "limit": 100},
+            timeout=10
+        )
         data = r.json()
-        raw = data.get("result", {}).get("data", {}).get("ads", []) or data.get("data", {}).get("ads", [])
+        raw = (
+            data.get("result", {}).get("data", {}).get("ads", [])
+            or data.get("data", {}).get("ads", [])
+        )
+
         clean = []
+        # Normalize market names so grouping works
+        market_lower = market.lower()
+        if market_lower == "binance":
+            source_name = "Binance"
+        elif market_lower == "mexc":
+            source_name = "MEXC"
+        else:
+            source_name = market.upper()
+
         for ad in raw:
             clean.append({
-                'source': market.title(),
-                'advertiser': ad.get('advertiser_name', 'Trader'),
-                'price': float(ad['price']),
-                'available': float(ad.get('available_amount', 0)),
-                'min': float(ad.get('min_amount', 0)),
-                'max': float(ad.get('max_amount', 0))
+                "source": source_name,
+                "advertiser": ad.get("advertiser_name", "Trader"),
+                "price": float(ad["price"]),
+                "available": float(ad.get("available_amount", 0)),
+                "min": float(ad.get("min_amount", 0)),
+                "max": float(ad.get("max_amount", 0))
             })
+        print(f"   P2P.Army {source_name}: {len(clean)} ads", file=sys.stderr)
         return clean
-    except: return []
+    except Exception as e:
+        print(f"   P2P.Army {market} error: {e}", file=sys.stderr)
+        return []
+
 
 # --- 2. TAPE READER (REAL TRADES ONLY) ---
 def capture_market_snapshot():
-    """ Gets data from ALL sources """
+    """Gets data from ALL sources (Binance, MEXC, Bybit)."""
     with ThreadPoolExecutor(max_workers=10) as ex:
-        # 1. Try API First
         f_bin_api = ex.submit(lambda: fetch_p2p_army_ads("binance", "SELL"))
         f_mexc = ex.submit(lambda: fetch_p2p_army_ads("mexc", "SELL"))
         f_byb = ex.submit(lambda: fetch_bybit("1"))
-        
-        bin_data = f_bin_api.result()
-        # Fallback for Binance if API fails/blocks
-        if not bin_data:
-            bin_data = fetch_binance_direct("SELL")
-            
-        return bin_data + f_byb.result() + f_mexc.result()
+
+        bin_data = f_bin_api.result() or []
+        mexc_data = f_mexc.result() or []
+        bybit_data = f_byb.result() or []
+
+    # Fallback for Binance if API fails/blocks
+    if not bin_data:
+        bin_data = fetch_binance_direct("SELL")
+
+    print(
+        f"   Snapshot sources → Binance: {len(bin_data)}, MEXC: {len(mexc_data)}, Bybit: {len(bybit_data)}",
+        file=sys.stderr
+    )
+
+    # Order doesn't matter for stats; we keep Bybit here for tape + table
+    return bin_data + bybit_data + mexc_data
+
 
 def load_market_state():
     if os.path.exists(SNAPSHOT_FILE):
-        try: 
-            with open(SNAPSHOT_FILE, 'r') as f: 
+        try:
+            with open(SNAPSHOT_FILE, "r") as f:
                 return json.load(f)
-        except: 
+        except Exception:
             return {}
     return {}
+
 
 def save_market_state(current_ads):
     state = {}
     for ad in current_ads:
         key = f"{ad['source']}_{ad['advertiser']}_{ad['price']}"
-        state[key] = ad['available']
-    with open(SNAPSHOT_FILE, 'w') as f: 
+        state[key] = ad["available"]
+    with open(SNAPSHOT_FILE, "w") as f:
         json.dump(state, f)
 
+
 def detect_real_trades(current_ads, peg):
-    """ 
-    Compares Old vs New inventory. 
+    """
+    Compares Old vs New inventory.
     If inventory drops, it's a CONFIRMED sale.
     """
     prev_state = load_market_state()
     trades = []
-    
+
     for ad in current_ads:
         key = f"{ad['source']}_{ad['advertiser']}_{ad['price']}"
         if key in prev_state:
             prev = prev_state[key]
-            curr = ad['available']
-            
+            curr = ad["available"]
+
             # Inventory Drop = Sale
             if curr < prev:
                 diff = prev - curr
                 if diff > 10:
                     trades.append({
-                        'type': 'trade',
-                        'source': ad['source'],
-                        'user': ad['advertiser'],
-                        'price': ad['price']/peg,
-                        'vol_usd': diff
+                        "type": "trade",
+                        "source": ad["source"],
+                        "user": ad["advertiser"],
+                        "price": ad["price"] / peg,
+                        "vol_usd": diff
                     })
-    
+
     return trades
+
 
 # --- 3. ANALYTICS ---
 def analyze(prices, peg):
-    if not prices: return None
-    clean_prices = [p for p in prices if 10 < p < 500]
-    if len(clean_prices) < 2: return None
-    
+    """
+    Basic stats on a list of ETB prices.
+    Returns values in "true ETB per USD" (divided by USDT peg).
+    """
+    if not prices:
+        return None
+
+    # Filter out junk and SORT to fix min/max
+    clean_prices = sorted(p for p in prices if 10 < p < 500)
+    if len(clean_prices) < 2:
+        return None
+
     adj = [p / peg for p in clean_prices]
     n = len(adj)
-    
-    try:
-        quantiles = statistics.quantiles(adj, n=100, method='inclusive')
-        p05, p10, q1, median, q3, p95 = quantiles[4], quantiles[9], quantiles[24], quantiles[49], quantiles[74], quantiles[94]
-    except:
-        median = statistics.median(adj)
-        p05, q1, q3, p95 = adj[0], adj[int(n*0.25)], adj[int(n*0.75)], adj[-1]
 
-    return {"median": median, "q1": q1, "q3": q3, "p05": p05, "p95": p95, "min": adj[0], "max": adj[-1], "raw_data": adj, "count": n}
+    try:
+        quantiles = statistics.quantiles(adj, n=100, method="inclusive")
+        p05 = quantiles[4]
+        p10 = quantiles[9]
+        q1 = quantiles[24]
+        median = quantiles[49]
+        q3 = quantiles[74]
+        p95 = quantiles[94]
+    except Exception:
+        median = statistics.median(adj)
+        p05 = adj[0]
+        q1 = adj[int(n * 0.25)]
+        q3 = adj[int(n * 0.75)]
+        p95 = adj[-1]
+
+    return {
+        "median": median,
+        "q1": q1,
+        "q3": q3,
+        "p05": p05,
+        "p95": p95,
+        "min": adj[0],
+        "max": adj[-1],
+        "raw_data": adj,
+        "count": n
+    }
+
 
 # --- 4. HISTORY ---
 def save_to_history(stats, official):
     file_exists = os.path.isfile(HISTORY_FILE)
-    with open(HISTORY_FILE, 'a', newline='') as f:
+    with open(HISTORY_FILE, "a", newline="") as f:
         w = csv.writer(f)
-        if not file_exists: w.writerow(["Timestamp", "Median", "Q1", "Q3", "Official"])
-        w.writerow([datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), round(stats['median'],2), round(stats['q1'],2), round(stats['q3'],2), round(official,2) if official else 0])
+        if not file_exists:
+            w.writerow(["Timestamp", "Median", "Q1", "Q3", "Official"])
+        w.writerow([
+            datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            round(stats["median"], 2),
+            round(stats["q1"], 2),
+            round(stats["q3"], 2),
+            round(official, 2) if official else 0
+        ])
+
 
 def load_history():
-    if not os.path.isfile(HISTORY_FILE): return [],[],[],[],[]
-    d, m, q1, q3, off = [],[],[],[],[]
-    with open(HISTORY_FILE, 'r') as f:
+    if not os.path.isfile(HISTORY_FILE):
+        return [], [], [], [], []
+
+    d, m, q1, q3, off = [], [], [], [], []
+    with open(HISTORY_FILE, "r") as f:
         reader = csv.reader(f)
         next(reader, None)
         for row in reader:
             try:
                 d.append(datetime.datetime.strptime(row[0], "%Y-%m-%d %H:%M:%S"))
-                m.append(float(row[1])); q1.append(float(row[2])); q3.append(float(row[3])); off.append(float(row[4]))
-            except: pass
-    return d[-48:], m[-48:], q1[-48:], q3[-48:], off[-48:]
+                m.append(float(row[1]))
+                q1.append(float(row[2]))
+                q3.append(float(row[3]))
+                off.append(float(row[4]))
+            except Exception:
+                pass
+
+    return (
+        d[-HISTORY_POINTS:],
+        m[-HISTORY_POINTS:],
+        q1[-HISTORY_POINTS:],
+        q3[-HISTORY_POINTS:],
+        off[-HISTORY_POINTS:]
+    )
+
 
 # --- 5. GRAPH GENERATOR (SUPER ZOOM) ---
 def generate_charts(stats, official_rate):
-    if not GRAPH_ENABLED: return
-    
+    if not GRAPH_ENABLED:
+        return
+
     themes = [
-        ("dark", GRAPH_FILENAME, {"bg":"#050505","fg":"#00ff9d","grid":"#222","median":"#ff0055","sec":"#00bfff","fill":"#00ff9d","alpha":0.7}),
-        ("light", GRAPH_LIGHT_FILENAME, {"bg":"#ffffff","fg":"#1a1a1a","grid":"#eee","median":"#d63384","sec":"#0d6efd","fill":"#00a876","alpha":0.5})
+        ("dark", GRAPH_FILENAME,
+         {"bg": "#050505", "fg": "#00ff9d", "grid": "#222",
+          "median": "#ff0055", "sec": "#00bfff", "fill": "#00ff9d", "alpha": 0.7}),
+        ("light", GRAPH_LIGHT_FILENAME,
+         {"bg": "#ffffff", "fg": "#1a1a1a", "grid": "#eee",
+          "median": "#d63384", "sec": "#0d6efd", "fill": "#00a876", "alpha": 0.5})
     ]
     dates, medians, q1s, q3s, offs = load_history()
 
     for mode, filename, style in themes:
-        plt.rcParams.update({"figure.facecolor": style["bg"], "axes.facecolor": style["bg"], "axes.edgecolor": style["fg"], "axes.labelcolor": style["fg"], "xtick.color": style["fg"], "ytick.color": style["fg"], "text.color": style["fg"]})
+        plt.rcParams.update({
+            "figure.facecolor": style["bg"],
+            "axes.facecolor": style["bg"],
+            "axes.edgecolor": style["fg"],
+            "axes.labelcolor": style["fg"],
+            "xtick.color": style["fg"],
+            "ytick.color": style["fg"],
+            "text.color": style["fg"]
+        })
         fig = plt.figure(figsize=(12, 14))
-        fig.suptitle(f'ETB LIQUIDITY SCANNER: {datetime.datetime.now().strftime("%H:%M")}', fontsize=20, color=style["fg"], fontweight='bold', y=0.97)
+        fig.suptitle(
+            f"ETB LIQUIDITY SCANNER: {datetime.datetime.now().strftime('%H:%M')}",
+            fontsize=20,
+            color=style["fg"],
+            fontweight="bold",
+            y=0.97
+        )
 
+        # Top: Live depth (Smart Zoom P05–P95)
         ax1 = fig.add_subplot(2, 1, 1)
-        data = stats['raw_data']
+        data = stats["raw_data"]
         y_jitter = [1 + random.uniform(-0.12, 0.12) for _ in data]
-        ax1.scatter(data, y_jitter, color=style["fg"], alpha=style["alpha"], s=30, edgecolors='none')
-        ax1.axvline(stats['median'], color=style["median"], linewidth=3)
-        ax1.axvline(stats['q1'], color=style["sec"], linewidth=2, linestyle='--', alpha=0.6)
-        ax1.axvline(stats['q3'], color=style["sec"], linewidth=2, linestyle='--', alpha=0.6)
-        ax1.text(stats['median'], 1.42, f"MEDIAN\n{stats['median']:.2f}", color=style["median"], ha='center', fontweight='bold')
-        ax1.text(stats['q1'], 0.58, f"Q1\n{stats['q1']:.2f}", color=style["sec"], ha='right', va='top')
-        ax1.text(stats['q3'], 0.58, f"Q3\n{stats['q3']:.2f}", color=style["sec"], ha='left', va='top')
-        if official_rate: ax1.axvline(official_rate, color=style["fg"], linestyle=':', linewidth=1.5)
-        
-        margin = (stats['p95'] - stats['p05']) * 0.1
-        if margin == 0: margin = 1
-        ax1.set_xlim([stats['p05'] - margin, stats['p95'] + margin])
-        ax1.set_ylim(0.5, 1.5); ax1.set_yticks([])
-        ax1.set_title("Live Market Depth (Smart Zoom)", color=style["fg"], loc='left', pad=10)
-        ax1.grid(True, axis='x', color=style["grid"], linestyle='--')
+        ax1.scatter(data, y_jitter, color=style["fg"], alpha=style["alpha"], s=30, edgecolors="none")
+        ax1.axvline(stats["median"], color=style["median"], linewidth=3)
+        ax1.axvline(stats["q1"], color=style["sec"], linewidth=2, linestyle="--", alpha=0.6)
+        ax1.axvline(stats["q3"], color=style["sec"], linewidth=2, linestyle="--", alpha=0.6)
+        ax1.text(
+            stats["median"],
+            1.42,
+            f"MEDIAN\n{stats['median']:.2f}",
+            color=style["median"],
+            ha="center",
+            fontweight="bold"
+        )
+        ax1.text(
+            stats["q1"],
+            0.58,
+            f"Q1\n{stats['q1']:.2f}",
+            color=style["sec"],
+            ha="right",
+            va="top"
+        )
+        ax1.text(
+            stats["q3"],
+            0.58,
+            f"Q3\n{stats['q3']:.2f}",
+            color=style["sec"],
+            ha="left",
+            va="top"
+        )
+        if official_rate:
+            ax1.axvline(official_rate, color=style["fg"], linestyle=":", linewidth=1.5)
 
+        margin = (stats["p95"] - stats["p05"]) * 0.1
+        if margin == 0:
+            margin = 1
+        ax1.set_xlim([stats["p05"] - margin, stats["p95"] + margin])
+        ax1.set_ylim(0.5, 1.5)
+        ax1.set_yticks([])
+        ax1.set_title("Live Market Depth (Smart Zoom)", color=style["fg"], loc="left", pad=10)
+        ax1.grid(True, axis="x", color=style["grid"], linestyle="--")
+
+        # Bottom: 24h history
         ax2 = fig.add_subplot(2, 1, 2)
         if len(dates) > 1:
             ax2.fill_between(dates, q1s, q3s, color=style["fill"], alpha=0.2, linewidth=0)
             ax2.plot(dates, medians, color=style["median"], linewidth=2)
-            if any(offs): ax2.plot(dates, offs, color=style["fg"], linestyle='--', linewidth=1, alpha=0.5)
-            ax2.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
-            ax2.yaxis.set_major_formatter(ticker.FormatStrFormatter('%.1f'))
+            if any(offs):
+                ax2.plot(dates, offs, color=style["fg"], linestyle="--", linewidth=1, alpha=0.5)
+            ax2.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
+            ax2.yaxis.set_major_formatter(ticker.FormatStrFormatter("%.1f"))
             ax2.yaxis.tick_right()
             ax2.grid(True, color=style["grid"], linewidth=0.5)
-            ax2.set_title("Historical Trend (24h)", color=style["fg"], loc='left')
+            ax2.set_title("Historical Trend (24h)", color=style["fg"], loc="left")
         plt.tight_layout(rect=[0, 0, 1, 0.95])
         plt.savefig(filename, dpi=150, facecolor=style["bg"])
         plt.close()
 
+
 # --- 6. WEB GENERATOR ---
 def update_website_html(stats, official, timestamp, actions, grouped_ads, peg):
-    prem = ((stats['median'] - official)/official)*100 if official else 0
+    prem = ((stats["median"] - official) / official) * 100 if official else 0
     cache_buster = int(time.time())
-    
+
+    # Per-source snapshot table
     table_rows = ""
     for source, ads in grouped_ads.items():
-        prices = [a['price'] for a in ads]
-        s = analyze(prices, peg)
+        prices = [a["price"] for a in ads]
+        s = analyze(prices, peg) if prices else None
         if s:
-            table_rows += f"<tr><td class='source-col'>{source}</td><td>{s['min']:.2f}</td><td>{s['q1']:.2f}</td><td class='med-col'>{s['median']:.2f}</td><td>{s['q3']:.2f}</td><td>{s['max']:.2f}</td><td>{s['count']}</td></tr>"
+            table_rows += (
+                f"<tr><td class='source-col'>{source}</td>"
+                f"<td>{s['min']:.2f}</td>"
+                f"<td>{s['q1']:.2f}</td>"
+                f"<td class='med-col'>{s['median']:.2f}</td>"
+                f"<td>{s['q3']:.2f}</td>"
+                f"<td>{s['max']:.2f}</td>"
+                f"<td>{s['count']}</td></tr>"
+            )
         else:
-            table_rows += f"<tr><td>{source}</td><td colspan='6' style='opacity:0.5'>No Data</td></tr>"
+            table_rows += (
+                f"<tr><td>{source}</td>"
+                f"<td colspan='6' style='opacity:0.5'>No Data</td></tr>"
+            )
 
+    # Trade tape
     feed_html = ""
     now_str = datetime.datetime.now().strftime("%H:%M")
-    
+
     if actions:
-        actions.sort(key=lambda x: x['vol_usd'], reverse=True)
+        actions.sort(key=lambda x: x["vol_usd"], reverse=True)
         for item in actions[:25]:
-            s_col = "#f3ba2f" if "Binance" in item['source'] else "#000" if "Bybit" in item['source'] else "#2e55e6"
+            s_col = "#f3ba2f" if "Binance" in item["source"] else "#000" if "Bybit" in item["source"] else "#2e55e6"
             feed_html += f"""
             <div class="feed-item">
                 <div class="feed-icon" style="background:#2ea043">🛒</div>
                 <div class="feed-content">
                     <span class="feed-ts">{now_str}</span> -> 
-                    <span class="feed-source" style="color:{s_col}">{item['source']}</span>: 
+                    <span class="feed-source" style="color:{s_col}">{item['source']}</span> 
                     <span class="feed-user">{item['user'][:10]}</span> 
                     <b style="color:#2ea043">BOUGHT</b> <span class="feed-vol">{item['vol_usd']:,.2f} USDT</span> 
                     @ <span class="feed-price">{item['price']:.2f} ETB</span>
@@ -376,7 +574,12 @@ def update_website_html(stats, official, timestamp, actions, grouped_ads, peg):
                     <img src="{GRAPH_FILENAME}?v={cache_buster}" id="chartImg" alt="Market Chart">
                 </div>
                 <div class="card">
-                    <table><thead><tr><th>Source</th><th>Min</th><th>Q1</th><th>Med</th><th>Q3</th><th>Max</th><th>Ads</th></tr></thead><tbody>{table_rows}</tbody></table>
+                    <table>
+                        <thead>
+                            <tr><th>Source</th><th>Min</th><th>Q1</th><th>Med</th><th>Q3</th><th>Max</th><th>Ads</th></tr>
+                        </thead>
+                        <tbody>{table_rows}</tbody>
+                    </table>
                 </div>
             </div>
 
@@ -400,7 +603,7 @@ def update_website_html(stats, official, timestamp, actions, grouped_ads, peg):
                 html.setAttribute('data-theme', theme);
                 document.getElementById('chartImg').src = theme === 'light' ? imgLight : imgDark;
             }})();
-
+            
             function toggleTheme() {{
                 const current = html.getAttribute('data-theme');
                 const next = current === 'light' ? 'dark' : 'light';
@@ -412,17 +615,19 @@ def update_website_html(stats, official, timestamp, actions, grouped_ads, peg):
     </body>
     </html>
     """
-    with open(HTML_FILENAME, "w") as f: f.write(html)
-    print("✅ Website generated.")
+    with open(HTML_FILENAME, "w") as f:
+        f.write(html)
+    print("✅ Website generated.", file=sys.stderr)
+
 
 # --- 7. MAIN ---
 def main():
-    print("🔍 Running v30.1 Hotfix Scan...", file=sys.stderr)
-    
+    print("🔍 Running v30.2 MEXC+History Fix Scan...", file=sys.stderr)
+
     # 1. SNAPSHOT 1
     print("   > Snapshot 1/2...", file=sys.stderr)
     snapshot_1 = capture_market_snapshot()
-    
+
     # 2. WAIT
     print(f"   > Waiting {BURST_WAIT_TIME}s...", file=sys.stderr)
     time.sleep(BURST_WAIT_TIME)
@@ -430,34 +635,72 @@ def main():
     # 3. SNAPSHOT 2
     print("   > Snapshot 2/2...", file=sys.stderr)
     snapshot_2 = capture_market_snapshot()
-    
-    f_off = fetch_official_rate()
-    f_peg = fetch_usdt_peg()
-    official = f_off or 0.0
-    peg = f_peg or 1.0
 
-    # Grouping
+    official = fetch_official_rate() or 0.0
+    peg = fetch_usdt_peg() or 1.0
+
+    # Group by source for table
     grouped_ads = {"Binance": [], "Bybit": [], "MEXC": []}
     for ad in snapshot_2:
-        if ad['source'] in grouped_ads: grouped_ads[ad['source']].append(ad)
+        src = ad.get("source")
+        if src in grouped_ads:
+            grouped_ads[src].append(ad)
 
     if snapshot_2:
+        # Tape + inventory tracking uses ALL sources, including Bybit
         real_actions = detect_real_trades(snapshot_2, peg)
         save_market_state(snapshot_2)
-        
-        all_prices = [x['price'] for x in snapshot_2]
-        stats = analyze(all_prices, peg)
-        
+
+        # 👇 IMPORTANT: Global stats & history EXCLUDE BYBIT
+        stats_prices = [ad["price"] for ad in snapshot_2 if ad.get("source") != "Bybit"]
+        stats = analyze(stats_prices, peg) if stats_prices else None
+
         if stats:
             save_to_history(stats, official)
             generate_charts(stats, official)
-            
-        update_website_html(stats, official, time.strftime('%Y-%m-%d %H:%M:%S'), real_actions, grouped_ads, peg)
+            update_website_html(
+                stats,
+                official,
+                time.strftime("%Y-%m-%d %H:%M:%S"),
+                real_actions,
+                grouped_ads,
+                peg
+            )
+        else:
+            print("⚠️ Could not compute stats (not enough non-Bybit prices).", file=sys.stderr)
+            fallback_stats = {
+                "median": 0, "q1": 0, "q3": 0,
+                "p05": 0, "p95": 0,
+                "min": 0, "max": 0,
+                "raw_data": [], "count": 0
+            }
+            update_website_html(
+                fallback_stats,
+                official,
+                time.strftime("%Y-%m-%d %H:%M:%S"),
+                real_actions,
+                grouped_ads,
+                peg
+            )
     else:
         print("⚠️ CRITICAL: No ads found.", file=sys.stderr)
-        update_website_html({"median":0, "min":0, "q1":0, "q3":0, "max":0, "count":0, "raw_data":[]}, official, "ERROR", [], grouped_ads, peg)
+        fallback_stats = {
+            "median": 0, "q1": 0, "q3": 0,
+            "p05": 0, "p95": 0,
+            "min": 0, "max": 0,
+            "raw_data": [], "count": 0
+        }
+        update_website_html(
+            fallback_stats,
+            official,
+            "ERROR",
+            [],
+            grouped_ads,
+            peg
+        )
 
-    print("✅ Update Complete.")
+    print("✅ Update Complete.", file=sys.stderr)
+
 
 if __name__ == "__main__":
     main()
