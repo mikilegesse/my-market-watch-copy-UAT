@@ -6,7 +6,7 @@
         <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="refresh" content="300">
-        <title>ETB Market Watch v33.1</title>
+        <title>ETB Market Watch v33.2</title>
         <style>
             :root { --bg: #050505; --card: #111; --text: #00ff9d; --sub: #ccc; --mute: #666; --accent: #ff0055; --link: #00bfff; --gold: #ffcc00; --border: #333; }
             [data-theme="light"] { --bg: #f4f4f9; --card: #fff; --text: #1a1a1a; --sub: #333; --mute: #888; --accent: #d63384; --link: #0d6efd; --gold: #ffc107; --border: #ddd; }
@@ -49,23 +49,23 @@
         <div class="container">
             <header>
                 <h1>ETB MARKET INTELLIGENCE</h1>
-                <div style="color:var(--mute); letter-spacing:4px; font-size:0.8rem;">/// INVENTORY TRACKING (90s window) ///</div>
+                <div style="color:var(--mute); letter-spacing:4px; font-size:0.8rem;">/// REAL-TIME TRACKING (60s window, 1hr history) ///</div>
                 <div class="toggle" onclick="toggleTheme()">🌓 Theme</div>
             </header>
 
             <div class="left-col">
                 <div class="card ticker">
                     <div style="color:var(--mute); font-size:0.8rem; letter-spacing:2px;">TRUE USD MEDIAN</div>
-                    <div class="price">176.32 <span style="font-size:1.5rem;color:var(--mute)">ETB</span></div>
+                    <div class="price">176.33 <span style="font-size:1.5rem;color:var(--mute)">ETB</span></div>
                     <span class="prem">Black Market Premium: +15.04%</span>
                 </div>
                 <div class="card chart">
-                    <img src="etb_neon_terminal.png?v=1764013552" id="chartImg" alt="Market Chart">
+                    <img src="etb_neon_terminal.png?v=1764013791" id="chartImg" alt="Market Chart">
                 </div>
                 <div class="card">
                     <table>
                         <thead><tr><th>Source</th><th>Min</th><th>Q1</th><th>Med</th><th>Q3</th><th>Max</th><th>Ads</th></tr></thead>
-                        <tbody><tr><td class='source-col'>Binance</td><td>174.64</td><td>175.54</td><td class='med-col'>176.30</td><td>176.32</td><td>176.33</td><td>168</td></tr><tr><td>Bybit</td><td colspan='6' style='opacity:0.5'>No Data</td></tr><tr><td class='source-col'>MEXC</td><td>175.03</td><td>177.72</td><td class='med-col'>180.04</td><td>182.33</td><td>183.03</td><td>33</td></tr></tbody>
+                        <tbody><tr><td class='source-col'>Binance</td><td>174.65</td><td>175.55</td><td class='med-col'>176.31</td><td>176.33</td><td>176.34</td><td>168</td></tr><tr><td>Bybit</td><td colspan='6' style='opacity:0.5'>No Data</td></tr><tr><td class='source-col'>MEXC</td><td>175.04</td><td>177.65</td><td class='med-col'>180.04</td><td>182.27</td><td>183.03</td><td>32</td></tr></tbody>
                     </table>
                 </div>
             </div>
@@ -73,19 +73,19 @@
             <div class="right-col">
                 <div class="card">
                     <div class="feed-title">👀 Recent Market Actions</div>
-                    <div class="feed-container"><div class='feed-item' style='color:#888'>⏳ No trades detected in 90s window. First run or market quiet.</div></div>
+                    <div class="feed-container"><div style='color:#ffcc00;font-size:0.9rem;margin-bottom:10px;'>💡 No trades yet - Showing Best Live Offers (Lowest Prices)</div></div>
                 </div>
             </div>
 
             <footer>
-                Official: 153.28 ETB | Last Update: 2025-11-24 19:45:52 UTC | 
-                Top 200 ads per source, 90s monitoring window
+                Official: 153.28 ETB | Last Update: 2025-11-24 19:49:51 UTC | 
+                60s monitoring per run, 1hr rolling history
             </footer>
         </div>
 
         <script>
-            const imgDark = "etb_neon_terminal.png?v=1764013552";
-            const imgLight = "etb_light_terminal.png?v=1764013552";
+            const imgDark = "etb_neon_terminal.png?v=1764013791";
+            const imgLight = "etb_light_terminal.png?v=1764013791";
             const html = document.documentElement;
             
             (function() {
