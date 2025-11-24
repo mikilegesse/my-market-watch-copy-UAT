@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v33.0 (Inventory Tracking - Extended Window)
+🇪🇹 ETB Financial Terminal v33.1 (Inventory Tracking - Extended Window Hotfix)
 - PROVEN: Uses v30.2's inventory tracking (available amount drops)
 - EXTENDED: 90-second window instead of 30s (catches more trades!)
 - LIMITED: 200 ads per source (faster collection)
@@ -451,7 +451,7 @@ def update_website_html(stats, official, timestamp, trades, grouped_ads, peg):
         <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="refresh" content="300">
-        <title>ETB Market Watch v33</title>
+        <title>ETB Market Watch v33.1</title>
         <style>
             :root {{ --bg: #050505; --card: #111; --text: #00ff9d; --sub: #ccc; --mute: #666; --accent: #ff0055; --link: #00bfff; --gold: #ffcc00; --border: #333; }}
             [data-theme="light"] {{ --bg: #f4f4f9; --card: #fff; --text: #1a1a1a; --sub: #333; --mute: #888; --accent: #d63384; --link: #0d6efd; --gold: #ffc107; --border: #ddd; }}
@@ -554,26 +554,31 @@ def update_website_html(stats, official, timestamp, trades, grouped_ads, peg):
     with open(HTML_FILENAME, "w") as f:
         f.write(html)
 
-# --- 7. MAIN (v30.2 BURST SCAN METHOD) ---
+# --- 7. MAIN (v30.2 BURST SCAN METHOD, FIXED BASELINE) ---
 def main():
-    print("🔍 Running v33.0 (Inventory Tracking - Extended)...", file=sys.stderr)
+    print("🔍 Running v33.1 (Inventory Tracking - Extended)...", file=sys.stderr)
     
-    # 1. SNAPSHOT 1
+    # Use ONE peg for the whole run
+    peg = fetch_usdt_peg() or 1.0
+    
+    # 1. SNAPSHOT 1  (baseline)
     print("   > Snapshot 1/2...", file=sys.stderr)
     snapshot_1 = capture_market_snapshot()
-    snapshot_1 = remove_outliers(snapshot_1, fetch_usdt_peg() or 1.0)
+    snapshot_1 = remove_outliers(snapshot_1, peg)
     
-    # 2. WAIT (Extended to 90 seconds!)
+    # Save baseline so detect_real_trades() can compare against it
+    save_market_state(snapshot_1)
+    
+    # 2. WAIT (Extended to 90 seconds)
     print(f"   > ⏳ Waiting {BURST_WAIT_TIME}s to catch trades...", file=sys.stderr)
     time.sleep(BURST_WAIT_TIME)
     
-    # 3. SNAPSHOT 2
+    # 3. SNAPSHOT 2  (after 90s)
     print("   > Snapshot 2/2...", file=sys.stderr)
     snapshot_2 = capture_market_snapshot()
-    snapshot_2 = remove_outliers(snapshot_2, fetch_usdt_peg() or 1.0)
+    snapshot_2 = remove_outliers(snapshot_2, peg)
     
     official = fetch_official_rate() or 0.0
-    peg = fetch_usdt_peg() or 1.0
     
     # Group by source
     grouped_ads = {"Binance": [], "Bybit": [], "MEXC": []}
@@ -582,10 +587,10 @@ def main():
             grouped_ads[ad["source"]].append(ad)
     
     if snapshot_2:
-        # Detect trades via inventory tracking
+        # Detect trades via inventory tracking (between snapshot_1 and snapshot_2)
         trades = detect_real_trades(snapshot_2, peg)
         
-        # Save state for next run
+        # Save new state for the NEXT run
         save_market_state(snapshot_2)
         
         # Stats (exclude Bybit from history)
