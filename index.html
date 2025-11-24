@@ -6,10 +6,10 @@
         <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="refresh" content="300">
-        <title>ETB Market Watch v34</title>
+        <title>ETB Market Watch</title>
         <style>
-            :root { --bg: #050505; --card: #111; --text: #00ff9d; --sub: #ccc; --mute: #666; --accent: #ff0055; --link: #00bfff; --gold: #ffcc00; --border: #333; }
-            [data-theme="light"] { --bg: #f4f4f9; --card: #fff; --text: #1a1a1a; --sub: #333; --mute: #888; --accent: #d63384; --link: #0d6efd; --gold: #ffc107; --border: #ddd; }
+            :root { --bg: #050505; --card: #111; --text: #00ff9d; --sub: #ccc; --mute: #666; --accent: #ff0055; --link: #00bfff; --gold: #ffcc00; --border: #333; --hover: rgba(0,255,157,0.05); }
+            [data-theme="light"] { --bg: #f4f4f9; --card: #fff; --text: #1a1a1a; --sub: #333; --mute: #888; --accent: #d63384; --link: #0d6efd; --gold: #ffc107; --border: #ddd; --hover: rgba(0,0,0,0.05); }
             
             body { background: var(--bg); color: var(--text); font-family: 'Courier New', monospace; margin: 0; padding: 20px; text-align: center; transition: 0.3s; }
             .container { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 2fr 1fr; gap: 20px; text-align: left; }
@@ -25,7 +25,7 @@
             .price { font-size: 4rem; font-weight: bold; color: var(--sub); margin: 10px 0; }
             .prem { color: var(--gold); font-size: 0.9rem; display: block; margin-top: 10px; }
             
-            .chart img { width: 100%; border-radius: 8px; display: block; border: 1px solid var(--border); }
+            .chart img { width: 100%; border-radius: 8px; display: block; border: 1px solid var(--border); transition: 0.3s; }
             
             table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
             th { text-align: left; padding: 12px; border-bottom: 2px solid var(--border); color: var(--text); }
@@ -49,313 +49,42 @@
         <div class="container">
             <header>
                 <h1>ETB MARKET INTELLIGENCE</h1>
-                <div style="color:var(--mute); letter-spacing:4px; font-size:0.8rem;">/// LIFECYCLE TRACKING (EthioBlackMarket Method) ///</div>
+                <div style="color:var(--mute); letter-spacing:4px; font-size:0.8rem;">/// LIVE P2P TAPE READER ///</div>
                 <div class="toggle" onclick="toggleTheme()">🌓 Theme</div>
             </header>
 
             <div class="left-col">
                 <div class="card ticker">
                     <div style="color:var(--mute); font-size:0.8rem; letter-spacing:2px;">TRUE USD MEDIAN</div>
-                    <div class="price">176.14 <span style="font-size:1.5rem;color:var(--mute)">ETB</span></div>
-                    <span class="prem">Black Market Premium: +14.92%</span>
+                    <div class="price">175.56 <span style="font-size:1.5rem;color:var(--mute)">ETB</span></div>
+                    <span class="prem">Black Market Premium: +14.54%</span>
                 </div>
                 <div class="card chart">
-                    <img src="etb_neon_terminal.png?v=1764020547" id="chartImg" alt="Market Chart">
+                    <img src="etb_neon_terminal.png?v=1764020867" id="chartImg" alt="Market Chart">
                 </div>
                 <div class="card">
                     <table>
-                        <thead><tr><th>Source</th><th>Min</th><th>Q1</th><th>Med</th><th>Q3</th><th>Max</th><th>Ads</th></tr></thead>
-                        <tbody><tr><td class='source-col'>Binance</td><td>174.61</td><td>175.05</td><td class='med-col'>175.95</td><td>176.30</td><td>176.31</td><td>193</td></tr><tr><td>Bybit</td><td colspan='6' style='opacity:0.5'>No Data</td></tr><tr><td class='source-col'>MEXC</td><td>175.01</td><td>177.30</td><td class='med-col'>179.12</td><td>182.01</td><td>182.81</td><td>29</td></tr></tbody>
+                        <thead>
+                            <tr><th>Source</th><th>Min</th><th>Q1</th><th>Med</th><th>Q3</th><th>Max</th><th>Ads</th></tr>
+                        </thead>
+                        <tbody><tr><td class='source-col'>Binance</td><td>174.60</td><td>175.00</td><td class='med-col'>175.56</td><td>176.30</td><td>176.31</td><td>200</td></tr><tr><td>Bybit</td><td colspan='6' style='opacity:0.5'>No Data</td></tr><tr><td>MEXC</td><td colspan='6' style='opacity:0.5'>No Data</td></tr></tbody>
                     </table>
                 </div>
             </div>
 
             <div class="right-col">
                 <div class="card">
-                    <div class="feed-title">👀 Recent Market Actions</div>
-                    <div class="feed-container"><div style='color:#ffcc00;font-size:0.9rem;margin-bottom:10px;'>💡 No activity yet - Showing 30 Highest Priced Offers</div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader0</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">182.81 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader1</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">182.71 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader2</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">182.56 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader3</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">182.40 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader4</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">182.32 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader5</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">182.22 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader6</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">182.06 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader7</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">182.01 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader8</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">181.72 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader9</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">181.56 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader10</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">181.21 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader11</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">180.03 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader12</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">180.01 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader13</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">180.01 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader14</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">179.12 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader15</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">179.11 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader16</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">179.01 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader17</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">178.15 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader18</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">178.11 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader19</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">178.00 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader20</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">177.70 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader21</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">177.30 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader22</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">177.23 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader23</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">177.00 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#2e55e6">🔵</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#2e55e6;font-weight:bold">MEXC</span>: 
-                            <span class="feed-user">Trader24</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">177.00 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#f3ba2f">🟡</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
-                            <span class="feed-user">Trader0</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">176.31 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#f3ba2f">🟡</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
-                            <span class="feed-user">Trader1</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">176.31 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#f3ba2f">🟡</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
-                            <span class="feed-user">Trader2</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">176.30 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#f3ba2f">🟡</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
-                            <span class="feed-user">Trader3</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">176.30 ETB</span>
-                        </div>
-                    </div>
-                    <div class="feed-item">
-                        <div class="feed-icon" style="background:#f3ba2f">🟡</div>
-                        <div class="feed-content">
-                            <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
-                            <span class="feed-user">Trader4</span> 
-                            offering <span class="feed-vol">~ USDT</span> 
-                            @ <span class="feed-price">176.30 ETB</span>
-                        </div>
-                    </div></div>
+                    <div class="feed-title">📢 Real-Time Trades (Inventory Drops)</div>
+                    <div class="feed-container"><div class='feed-item' style='color:#888'>No active trades in last 30s window (Market Quiet).</div></div>
                 </div>
             </div>
 
-            <footer>
-                Official: 153.28 ETB | Last Update: 2025-11-24 21:42:27 UTC | 
-                Tracking ad lifecycle (appearing/disappearing)
-            </footer>
+            <footer>Official Bank Rate: 153.28 ETB | Last Update: 2025-11-24 21:47:47 UTC</footer>
         </div>
 
         <script>
-            const imgDark = "etb_neon_terminal.png?v=1764020547";
-            const imgLight = "etb_light_terminal.png?v=1764020547";
+            const imgDark = "etb_neon_terminal.png?v=1764020867";
+            const imgLight = "etb_light_terminal.png?v=1764020867";
             const html = document.documentElement;
             
             (function() {
@@ -363,7 +92,7 @@
                 html.setAttribute('data-theme', theme);
                 document.getElementById('chartImg').src = theme === 'light' ? imgLight : imgDark;
             })();
-
+            
             function toggleTheme() {
                 const current = html.getAttribute('data-theme');
                 const next = current === 'light' ? 'dark' : 'light';
