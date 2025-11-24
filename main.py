@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v33.2 (FIXED Comparison)
-- FIXED: Compares snapshot_2 vs snapshot_1 (in-memory, not stale file!)
-- SENSITIVE: 1 USDT minimum (catches ALL trades)
-- WINDOW: 1-hour rolling history
-- FALLBACK: Shows Best Live Offers if no trades
+🇪🇹 ETB Financial Terminal v34.0 (Lifecycle Tracking - EthioBlackMarket Method)
+- NEW REQUEST: Ad ID appears → "a new request"
+- BOUGHT: Ad ID disappears → "bought remaining"
+- SIMPLE: Just track appearing/disappearing IDs (not inventory!)
+- PROVEN: Same method as ethioblackmarket.com
 """
 
 import requests
@@ -86,8 +86,9 @@ def fetch_binance_direct(trade_type):
             for d in data:
                 adv = d.get("adv", {})
                 ads.append({
+                    "id": str(adv.get("advNo", f"bin_{len(ads)}")),
                     "source": "Binance",
-                    "advertiser": d.get("advertiser", {}).get("nickName", "User"),
+                    "advertiser": d.get("advertiser", {}).get("nickName", f"Trader{len(ads)}"),
                     "price": float(adv.get("price")),
                     "available": float(adv.get("surplusAmount", 0)),
                 })
@@ -119,8 +120,9 @@ def fetch_bybit(side):
             
             for i in items:
                 ads.append({
+                    "id": str(i.get("id", f"bybit_{len(ads)}")),
                     "source": "Bybit",
-                    "advertiser": i.get("nickName", "User"),
+                    "advertiser": i.get("nickName", f"Trader{len(ads)}"),
                     "price": float(i.get("price")),
                     "available": float(i.get("lastQuantity", 0)),
                 })
@@ -149,27 +151,32 @@ def fetch_p2p_army_ads(market, side):
         if not raw and isinstance(data, list):
             raw = data
         
-        # Debug: Print first ad structure
-        if raw and len(raw) > 0:
-            print(f"   {market} sample ad fields: {list(raw[0].keys())[:10]}", file=sys.stderr)
-        
         source_name = "Binance" if market.lower() == "binance" else "MEXC"
         clean = []
         
         for ad in raw[:MAX_ADS_PER_SOURCE]:
             if isinstance(ad, dict) and "price" in ad:
                 try:
-                    # Try multiple possible field names for advertiser
+                    # Extract ad ID
+                    ad_id = (
+                        ad.get("id") or
+                        ad.get("advNo") or
+                        ad.get("adv_no") or
+                        ad.get("orderNumber") or
+                        f"unknown_{len(clean)}"
+                    )
+                    
+                    # Extract advertiser
                     advertiser = (
                         ad.get("advertiser_name") or 
                         ad.get("advertiserName") or
                         ad.get("nickname") or 
                         ad.get("nickName") or
                         ad.get("merchant", {}).get("nickName") if isinstance(ad.get("merchant"), dict) else None or
-                        f"{source_name}Trader"
+                        f"Trader{len(clean)}"
                     )
                     
-                    # Try multiple possible field names for available amount
+                    # Extract available amount
                     available = float(
                         ad.get("available_amount") or 
                         ad.get("availableAmount") or
@@ -179,6 +186,7 @@ def fetch_p2p_army_ads(market, side):
                     )
                     
                     clean.append({
+                        "id": str(ad_id),
                         "source": source_name,
                         "advertiser": str(advertiser),
                         "price": float(ad["price"]),
@@ -193,7 +201,7 @@ def fetch_p2p_army_ads(market, side):
         print(f"   {market} error: {e}", file=sys.stderr)
         return []
 
-# --- 2. INVENTORY TRACKING ---
+# --- 2. LIFECYCLE TRACKING (ETHIOBLACKMARKET METHOD!) ---
 def capture_market_snapshot():
     with ThreadPoolExecutor(max_workers=10) as ex:
         f_bin = ex.submit(lambda: fetch_p2p_army_ads("binance", "SELL"))
@@ -227,57 +235,63 @@ def remove_outliers(ads, peg):
     
     return filtered
 
-def build_state_dict(ads):
-    """Convert ad list to state dict for comparison"""
-    state = {}
-    for ad in ads:
-        key = f"{ad['source']}_{ad['advertiser']}_{ad['price']}"
-        state[key] = ad["available"]
-    return state
-
-def detect_real_trades(snapshot_before, snapshot_after, peg):
+def detect_lifecycle_events(snapshot_before, snapshot_after, peg):
     """
-    ✅ FIXED: Compares snapshot_after vs snapshot_before (in-memory!)
-    Not comparing to stale file anymore!
+    ✅ ETHIOBLACKMARKET METHOD: Track ad IDs appearing/disappearing
+    - Ad ID appears → "a new request"
+    - Ad ID disappears → "bought remaining"
     """
     if not snapshot_before:
-        print("   > No baseline snapshot to compare", file=sys.stderr)
+        print("   > First run - establishing baseline", file=sys.stderr)
         return []
     
-    prev_state = build_state_dict(snapshot_before)
-    curr_state = build_state_dict(snapshot_after)
+    # Build ID sets (only Binance + MEXC)
+    prev_ads = {ad['id']: ad for ad in snapshot_before if ad.get('source', '').lower() in ['binance', 'mexc']}
+    curr_ads = {ad['id']: ad for ad in snapshot_after if ad.get('source', '').lower() in ['binance', 'mexc']}
     
-    trades = []
+    prev_ids = set(prev_ads.keys())
+    curr_ids = set(curr_ads.keys())
     
-    for ad in snapshot_after:
-        # Only track Binance and MEXC
-        if ad["source"].lower() not in ["binance", "mexc"]:
-            continue
-        
-        key = f"{ad['source']}_{ad['advertiser']}_{ad['price']}"
-        
-        if key in prev_state:
-            prev_inventory = prev_state[key]
-            curr_inventory = ad["available"]
-            
-            # Inventory Drop = Trade!
-            if curr_inventory < prev_inventory:
-                diff = prev_inventory - curr_inventory
-                
-                # ✅ CATCH EVERYTHING (1 USDT minimum)
-                if diff >= 1:
-                    trades.append({
-                        "type": "trade",
-                        "source": ad["source"],
-                        "user": ad["advertiser"],
-                        "price": ad["price"] / peg,
-                        "vol_usd": diff,
-                        "timestamp": time.time()
-                    })
-                    print(f"   ✅ TRADE: {ad['source']} - {ad['advertiser'][:15]} sold {diff:,.0f} USDT @ {ad['price']/peg:.2f} ETB", file=sys.stderr)
+    # IDs that appeared = NEW REQUESTS
+    new_ids = curr_ids - prev_ids
     
-    print(f"   > Detected {len(trades)} trades in {BURST_WAIT_TIME}s window", file=sys.stderr)
-    return trades
+    # IDs that disappeared = BOUGHT
+    gone_ids = prev_ids - curr_ids
+    
+    print(f"   > Lifecycle: {len(new_ids)} new requests, {len(gone_ids)} bought, {len(prev_ids & curr_ids)} stable", file=sys.stderr)
+    
+    events = []
+    
+    # New requests (ads that appeared)
+    for ad_id in new_ids:
+        ad = curr_ads[ad_id]
+        if ad['available'] > 10:  # Only report significant ads
+            events.append({
+                "type": "new_request",
+                "source": ad['source'],
+                "user": ad['advertiser'],
+                "price": ad['price'] / peg,
+                "vol_usd": ad['available'],
+                "timestamp": time.time()
+            })
+            print(f"   🆕 NEW: {ad['source']} - {ad['advertiser'][:15]} new request {ad['available']:,.0f} USDT @ {ad['price']/peg:.2f} ETB", file=sys.stderr)
+    
+    # Bought (ads that disappeared)
+    for ad_id in gone_ids:
+        ad = prev_ads[ad_id]
+        if ad['available'] > 10:  # Only report significant ads
+            events.append({
+                "type": "bought",
+                "source": ad['source'],
+                "user": ad['advertiser'],
+                "price": ad['price'] / peg,
+                "vol_usd": ad['available'],
+                "timestamp": time.time()
+            })
+            print(f"   ✅ BOUGHT: {ad['source']} - {ad['advertiser'][:15]} bought {ad['available']:,.0f} USDT @ {ad['price']/peg:.2f} ETB", file=sys.stderr)
+    
+    print(f"   > Detected {len(events)} market actions in {BURST_WAIT_TIME}s window", file=sys.stderr)
+    return events
 
 def load_recent_trades():
     if not os.path.exists(TRADES_FILE):
@@ -290,22 +304,22 @@ def load_recent_trades():
         cutoff = time.time() - (TRADE_RETENTION_MINUTES * 60)
         recent = [t for t in all_trades if t.get("timestamp", 0) > cutoff]
         
-        print(f"   > Loaded {len(recent)} trades from last {TRADE_RETENTION_MINUTES} minutes", file=sys.stderr)
+        print(f"   > Loaded {len(recent)} events from last {TRADE_RETENTION_MINUTES} minutes", file=sys.stderr)
         return recent
     except:
         return []
 
-def save_trades(new_trades):
+def save_trades(new_events):
     recent = load_recent_trades()
-    all_trades = recent + new_trades
+    all_events = recent + new_events
     
     cutoff = time.time() - (TRADE_RETENTION_MINUTES * 60)
-    filtered = [t for t in all_trades if t.get("timestamp", 0) > cutoff]
+    filtered = [e for e in all_events if e.get("timestamp", 0) > cutoff]
     
     with open(TRADES_FILE, "w") as f:
         json.dump(filtered, f)
     
-    print(f"   > Saved {len(filtered)} trades to history (last hour)", file=sys.stderr)
+    print(f"   > Saved {len(filtered)} events to history (last hour)", file=sys.stderr)
 
 # --- 3. ANALYTICS ---
 def analyze(prices, peg):
@@ -454,44 +468,52 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
         else:
             table_rows += f"<tr><td>{source}</td><td colspan='6' style='opacity:0.5'>No Data</td></tr>"
     
-    # Feed
+    # Feed (lifecycle events!)
     feed_html = ""
-    recent_trades = load_recent_trades()
+    recent_events = load_recent_trades()
     
-    if recent_trades:
-        recent_trades.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+    if recent_events:
+        recent_events.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
         
-        feed_html = f"<div style='color:#2ea043;font-size:0.9rem;margin-bottom:10px;'>✅ {len(recent_trades)} trades in last hour</div>"
+        feed_html = f"<div style='color:#2ea043;font-size:0.9rem;margin-bottom:10px;'>✅ {len(recent_events)} market actions in last hour</div>"
         
-        for trade in recent_trades[:30]:
-            ts = datetime.datetime.fromtimestamp(trade.get("timestamp", time.time()))
+        for event in recent_events[:30]:
+            ts = datetime.datetime.fromtimestamp(event.get("timestamp", time.time()))
             time_str = ts.strftime("%I:%M:%S %p")
-            age_seconds = time.time() - trade.get("timestamp", time.time())
+            age_seconds = time.time() - event.get("timestamp", time.time())
             age_str = f"{int(age_seconds/60)}min ago" if age_seconds >= 60 else f"{int(age_seconds)}s ago"
             
-            source = trade["source"]
+            source = event["source"]
             s_col = "#f3ba2f" if "Binance" in source else "#2e55e6"
             icon = "🟡" if "Binance" in source else "🔵"
             
+            # Different display based on event type
+            if event["type"] == "new_request":
+                action = "<b style='color:#00bfff'>a new request of</b>"
+                bg = "#00bfff"
+            else:  # bought
+                action = "<b style='color:#2ea043'>bought remaining</b>"
+                bg = "#2ea043"
+            
             feed_html += f"""
             <div class="feed-item">
-                <div class="feed-icon" style="background:#2ea043">{icon}</div>
+                <div class="feed-icon" style="background:{bg}">{icon}</div>
                 <div class="feed-content">
                     <span class="feed-ts">{time_str}</span> <span style="color:#666">({age_str})</span> → 
                     <span class="feed-source" style="color:{s_col};font-weight:bold">{source}</span>: 
-                    <span class="feed-user">{trade['user'][:15]}</span> 
-                    <b style="color:#2ea043">SOLD</b> 
-                    <span class="feed-vol">{trade['vol_usd']:,.0f} USDT</span> 
-                    @ <span class="feed-price">{trade['price']:.2f} ETB</span>
+                    <span class="feed-user">{event['user'][:15]}</span> 
+                    {action} 
+                    <span class="feed-vol">{event['vol_usd']:,.0f} USDT</span> 
+                    @ <span class="feed-price">{event['price']:.2f} ETB</span>
                 </div>
             </div>"""
     else:
-        # Fallback: Show Best Live Offers (NO availability filter - show ALL)
+        # Fallback: Show highest priced offers
         all_offers = [ad for ad in current_ads if ad.get("source", "").lower() in ["binance", "mexc"]]
-        all_offers.sort(key=lambda x: x.get("price", 999999) / peg)
+        all_offers.sort(key=lambda x: x.get("price", 0) / peg, reverse=True)
         
         if all_offers:
-            feed_html = f"<div style='color:#ffcc00;font-size:0.9rem;margin-bottom:10px;'>💡 No trades yet - Showing {len(all_offers[:30])} Best Live Offers (Lowest Prices)</div>"
+            feed_html = f"<div style='color:#ffcc00;font-size:0.9rem;margin-bottom:10px;'>💡 No activity yet - Showing 30 Highest Priced Offers</div>"
             
             for offer in all_offers[:30]:
                 try:
@@ -500,7 +522,6 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                     icon = "🟡" if "Binance" in source else "🔵"
                     
                     avail = offer.get('available', 0)
-                    # Show availability even if it's 0
                     avail_str = f"{avail:,.1f}" if avail > 0 else "~"
                     
                     feed_html += f"""
@@ -516,18 +537,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                 except Exception as e:
                     continue
         else:
-            # No Binance/MEXC ads at all
-            total_ads = len(current_ads)
-            binance_mexc = len([ad for ad in current_ads if ad.get("source", "").lower() in ["binance", "mexc"]])
-            bybit_ads = len([ad for ad in current_ads if ad.get("source", "").lower() == "bybit"])
-            feed_html = f"""
-            <div style='color:#ff6b6b;font-size:0.9rem;margin-bottom:10px;'>
-                ⚠️ No Binance/MEXC offers found<br>
-                Total ads: {total_ads}<br>
-                Binance/MEXC: {binance_mexc}<br>
-                Bybit: {bybit_ads}<br>
-                (Check API/outlier filtering)
-            </div>"""
+            feed_html = "<div style='color:#888;font-size:0.9rem;'>⏳ Waiting for market activity...</div>"
     
     html = f"""
     <!DOCTYPE html>
@@ -537,7 +547,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
         <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="refresh" content="300">
-        <title>ETB Market Watch v33.2</title>
+        <title>ETB Market Watch v34</title>
         <style>
             :root {{ --bg: #050505; --card: #111; --text: #00ff9d; --sub: #ccc; --mute: #666; --accent: #ff0055; --link: #00bfff; --gold: #ffcc00; --border: #333; }}
             [data-theme="light"] {{ --bg: #f4f4f9; --card: #fff; --text: #1a1a1a; --sub: #333; --mute: #888; --accent: #d63384; --link: #0d6efd; --gold: #ffc107; --border: #ddd; }}
@@ -580,7 +590,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
         <div class="container">
             <header>
                 <h1>ETB MARKET INTELLIGENCE</h1>
-                <div style="color:var(--mute); letter-spacing:4px; font-size:0.8rem;">/// REAL-TIME TRACKING (60s window, 1hr history) ///</div>
+                <div style="color:var(--mute); letter-spacing:4px; font-size:0.8rem;">/// LIFECYCLE TRACKING (EthioBlackMarket Method) ///</div>
                 <div class="toggle" onclick="toggleTheme()">🌓 Theme</div>
             </header>
 
@@ -610,7 +620,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
 
             <footer>
                 Official: {official:.2f} ETB | Last Update: {timestamp} UTC | 
-                60s monitoring per run, 1hr rolling history
+                Tracking ad lifecycle (appearing/disappearing)
             </footer>
         </div>
 
@@ -640,9 +650,9 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
     with open(HTML_FILENAME, "w") as f:
         f.write(html)
 
-# --- 7. MAIN (FIXED!) ---
+# --- 7. MAIN (LIFECYCLE TRACKING!) ---
 def main():
-    print("🔍 Running v33.2 (FIXED Comparison)...", file=sys.stderr)
+    print("🔍 Running v34.0 (Lifecycle Tracking - EthioBlackMarket Method)...", file=sys.stderr)
     
     peg = fetch_usdt_peg() or 1.0
     
@@ -652,7 +662,7 @@ def main():
     snapshot_1 = remove_outliers(snapshot_1, peg)
     
     # 2. WAIT
-    print(f"   > ⏳ Waiting {BURST_WAIT_TIME}s to catch trades...", file=sys.stderr)
+    print(f"   > ⏳ Waiting {BURST_WAIT_TIME}s for ads to appear/disappear...", file=sys.stderr)
     time.sleep(BURST_WAIT_TIME)
     
     # 3. SNAPSHOT 2
@@ -665,19 +675,19 @@ def main():
     # Group by source
     grouped_ads = {"Binance": [], "Bybit": [], "MEXC": []}
     for ad in snapshot_2:
-        if ad["source"] in grouped_ads:
+        if ad.get("source") in grouped_ads:
             grouped_ads[ad["source"]].append(ad)
     
     if snapshot_2:
-        # ✅ FIXED: Compare snapshot_2 to snapshot_1 (in-memory!)
-        new_trades = detect_real_trades(snapshot_1, snapshot_2, peg)
+        # ✅ LIFECYCLE TRACKING: Detect appearing/disappearing ads
+        new_events = detect_lifecycle_events(snapshot_1, snapshot_2, peg)
         
-        # Save trades to persistent history
-        if new_trades:
-            save_trades(new_trades)
+        # Save events to persistent history
+        if new_events:
+            save_trades(new_events)
         
         # Stats (exclude Bybit)
-        stats_prices = [ad["price"] for ad in snapshot_2 if ad["source"] != "Bybit"]
+        stats_prices = [ad["price"] for ad in snapshot_2 if ad.get("source") != "Bybit"]
         stats = analyze(stats_prices, peg)
         
         if stats:
@@ -693,7 +703,7 @@ def main():
     else:
         print("⚠️ No ads found", file=sys.stderr)
     
-    print(f"✅ Complete! Detected {len(new_trades) if 'new_trades' in locals() else 0} trades this run.")
+    print(f"✅ Complete! Detected {len(new_events) if 'new_events' in locals() else 0} events this run.")
 
 if __name__ == "__main__":
     main()
