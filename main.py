@@ -1221,22 +1221,22 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                 const buys = filtered.filter(t => t.type === 'buy').length;
                 const sells = filtered.filter(t => t.type === 'sell').length;
                 document.getElementById('feedStats').innerHTML = 
-                    `<span style="color:var(--green)">🟢 ${buys} Buys</span> • <span style="color:var(--red)">🔴 ${sells} Sells</span>`;
+                    '<span style="color:var(--green)">🟢 ' + buys + ' Buys</span> • <span style="color:var(--red)">🔴 ' + sells + ' Sells</span>';
             }}
             
-            function renderFeed(trades) {
+            function renderFeed(trades) {{
                 const container = document.getElementById('feedContainer');
                 
-                if (trades.length === 0) {
+                if (trades.length === 0) {{
                     container.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary)">No trades in this period</div>';
                     return;
-                }
+                }}
                 
-                const html = trades.slice(0, 50).reverse().map(trade => {
+                const html = trades.slice(0, 50).reverse().map(trade => {{
                     const date = new Date(trade.timestamp * 1000);
-                    const time = date.toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit'});
+                    const time = date.toLocaleTimeString('en-US', {{hour: '2-digit', minute: '2-digit'}});
                     const ageMin = Math.floor((Date.now() / 1000 - trade.timestamp) / 60);
-                    const age = ageMin < 60 ? `${ageMin}m ago` : `${Math.floor(ageMin/60)}h ago`;
+                    const age = ageMin < 60 ? ageMin + 'm ago' : Math.floor(ageMin/60) + 'h ago';
                     
                     const isBuy = trade.type === 'buy';
                     const icon = isBuy ? '↗' : '↘';
@@ -1247,28 +1247,28 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                     
                     return `
                         <div class="feed-item">
-                            <div class="feed-icon ${trade.type}">
-                                ${icon}
+                            <div class="feed-icon ${{trade.type}}">
+                                ${{icon}}
                             </div>
                             <div class="feed-content">
                                 <div class="feed-meta">
-                                    <span>${time}</span>
-                                    <span>${age}</span>
+                                    <span>${{time}}</span>
+                                    <span>${{age}}</span>
                                 </div>
                                 <div class="feed-text">
-                                    ${sourceEmoji} <span class="feed-user">${trade.user.substring(0, 15)}</span>
-                                    <span style="color:${sourceColor};font-weight:600">(${trade.source})</span>
-                                    <b style="color:${color}">${action}</b>
-                                    <span class="feed-amount">${trade.vol_usd.toFixed(0)} USDT</span>
-                                    @ <span class="feed-price">${trade.price.toFixed(2)} ETB</span>
+                                    ${{sourceEmoji}} <span class="feed-user">${{trade.user.substring(0, 15)}}</span>
+                                    <span style="color:${{sourceColor}};font-weight:600">(${{trade.source}})</span>
+                                    <b style="color:${{color}}">${{action}}</b>
+                                    <span class="feed-amount">${{trade.vol_usd.toFixed(0)}} USDT</span>
+                                    @ <span class="feed-price">${{trade.price.toFixed(2)}} ETB</span>
                                 </div>
                             </div>
                         </div>
                     `;
-                }).join('');
+                }}).join('');
                 
                 container.innerHTML = html;
-            }
+            }}
             
             // Initialize
             filterTrades('live');
