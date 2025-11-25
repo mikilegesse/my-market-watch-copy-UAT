@@ -6,7 +6,7 @@
         <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="refresh" content="300">
-        <title>ETB Market Watch v35.1</title>
+        <title>ETB Market Watch v35.2</title>
         <style>
             :root { --bg: #050505; --card: #111; --text: #00ff9d; --sub: #ccc; --mute: #666; --accent: #ff0055; --link: #00bfff; --gold: #ffcc00; --border: #333; }
             [data-theme="light"] { --bg: #f4f4f9; --card: #fff; --text: #1a1a1a; --sub: #333; --mute: #888; --accent: #d63384; --link: #0d6efd; --gold: #ffc107; --border: #ddd; }
@@ -49,23 +49,31 @@
         <div class="container">
             <header>
                 <h1>ETB MARKET INTELLIGENCE</h1>
-                <div style="color:var(--mute); letter-spacing:4px; font-size:0.8rem;">/// INVENTORY TRACKING (v29.1 + MEXC v16.0 Fix) ///</div>
+                <div style="color:var(--mute); letter-spacing:4px; font-size:0.8rem;">/// INVENTORY TRACKING + SMART FILTERING + DISTRIBUTION ///</div>
                 <div class="toggle" onclick="toggleTheme()">🌓 Theme</div>
             </header>
 
             <div class="left-col">
                 <div class="card ticker">
                     <div style="color:var(--mute); font-size:0.8rem; letter-spacing:2px;">TRUE USD MEDIAN</div>
-                    <div class="price">175.60 <span style="font-size:1.5rem;color:var(--mute)">ETB</span></div>
-                    <span class="prem">Black Market Premium: +14.57%</span>
+                    <div class="price">175.59 <span style="font-size:1.5rem;color:var(--mute)">ETB</span></div>
+                    <span class="prem">Black Market Premium: +14.56%</span>
                 </div>
                 <div class="card chart">
-                    <img src="etb_neon_terminal.png?v=1764031009" id="chartImg" alt="Market Chart">
+                    <img src="etb_neon_terminal.png?v=1764031217" id="chartImg" alt="Market Chart">
                 </div>
                 <div class="card">
+                    <h3 style="margin:0 0 15px 0; color:var(--text); font-size:1rem;">Market Summary by Source</h3>
                     <table>
                         <thead><tr><th>Source</th><th>Min</th><th>Q1</th><th>Med</th><th>Q3</th><th>Max</th><th>Ads</th></tr></thead>
-                        <tbody><tr><td class='source-col'>Binance</td><td>174.63</td><td>175.03</td><td class='med-col'>175.60</td><td>176.33</td><td>176.34</td><td>200</td></tr><tr><td>Bybit</td><td colspan='6' style='opacity:0.5'>No Data</td></tr><tr><td class='source-col'>MEXC</td><td>90.02</td><td>150.03</td><td class='med-col'>176.04</td><td>179.13</td><td>182.83</td><td>33</td></tr></tbody>
+                        <tbody><tr><td class='source-col'>Binance</td><td>174.62</td><td>175.02</td><td class='med-col'>175.59</td><td>176.32</td><td>176.33</td><td>200</td></tr><tr><td>Bybit</td><td colspan='6' style='opacity:0.5'>No Data</td></tr><tr><td class='source-col'>MEXC</td><td>90.01</td><td>150.02</td><td class='med-col'>176.03</td><td>179.13</td><td>182.83</td><td>33</td></tr></tbody>
+                    </table>
+                </div>
+                <div class="card">
+                    <h3 style="margin:0 0 15px 0; color:var(--text); font-size:1rem;">📊 Price Distribution (5 ETB Bands)</h3>
+                    <table>
+                        <thead><tr><th>Price Range</th><th>Ad Count</th></tr></thead>
+                        <tbody><tr><td style=''>90-95 ETB</td><td style=''>1</td></tr><tr><td style=''>120-125 ETB</td><td style=''>2</td></tr><tr><td style=''>130-135 ETB</td><td style=''>2</td></tr><tr><td style=''>135-140 ETB</td><td style=''>1</td></tr><tr><td style=''>140-145 ETB</td><td style=''>1</td></tr><tr><td style=''>145-150 ETB</td><td style=''>1</td></tr><tr><td style=''>150-155 ETB</td><td style=''>2</td></tr><tr><td style=''>160-165 ETB</td><td style=''>2</td></tr><tr><td style=''>165-170 ETB</td><td style=''>1</td></tr><tr><td style=''>170-175 ETB</td><td style=''>52</td></tr><tr><td style='font-weight:bold;color:var(--accent)'>175-180 ETB</td><td style='font-weight:bold;color:var(--accent)'>161</td></tr><tr><td style=''>180-185 ETB</td><td style=''>8</td></tr></tbody>
                     </table>
                 </div>
             </div>
@@ -73,154 +81,11 @@
             <div class="right-col">
                 <div class="card">
                     <div class="feed-title">👀 Recent Market Actions</div>
-                    <div class="feed-container"><div style='color:#2ea043;font-size:0.9rem;margin-bottom:10px;'>✅ 40 trades in last hour</div>
+                    <div class="feed-container"><div style='color:#2ea043;font-size:0.9rem;margin-bottom:10px;'>✅ 54 trades in last hour</div>
             <div class="feed-item">
                 <div class="feed-icon" style="background:#2ea043">🟡</div>
                 <div class="feed-content">
-                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(0s ago)</span> → 
-                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
-                    <span class="feed-user">ETHIO USD</span> 
-                    <b style="color:#2ea043">SOLD</b> 
-                    <span class="feed-vol">3,983 USDT</span> 
-                    @ <span class="feed-price">174.64 ETB</span>
-                </div>
-            </div>
-            <div class="feed-item">
-                <div class="feed-icon" style="background:#2ea043">🟡</div>
-                <div class="feed-content">
-                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(0s ago)</span> → 
-                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
-                    <span class="feed-user">ETHIO USD</span> 
-                    <b style="color:#2ea043">SOLD</b> 
-                    <span class="feed-vol">778 USDT</span> 
-                    @ <span class="feed-price">174.64 ETB</span>
-                </div>
-            </div>
-            <div class="feed-item">
-                <div class="feed-icon" style="background:#2ea043">🟡</div>
-                <div class="feed-content">
-                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(0s ago)</span> → 
-                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
-                    <span class="feed-user">Eye-Trader</span> 
-                    <b style="color:#2ea043">SOLD</b> 
-                    <span class="feed-vol">867 USDT</span> 
-                    @ <span class="feed-price">174.64 ETB</span>
-                </div>
-            </div>
-            <div class="feed-item">
-                <div class="feed-icon" style="background:#2ea043">🟡</div>
-                <div class="feed-content">
-                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(0s ago)</span> → 
-                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
-                    <span class="feed-user">daily hustler </span> 
-                    <b style="color:#2ea043">SOLD</b> 
-                    <span class="feed-vol">4,762 USDT</span> 
-                    @ <span class="feed-price">175.58 ETB</span>
-                </div>
-            </div>
-            <div class="feed-item">
-                <div class="feed-icon" style="background:#2ea043">🟡</div>
-                <div class="feed-content">
-                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(0s ago)</span> → 
-                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
-                    <span class="feed-user">daily hustler </span> 
-                    <b style="color:#2ea043">SOLD</b> 
-                    <span class="feed-vol">17,722 USDT</span> 
-                    @ <span class="feed-price">175.58 ETB</span>
-                </div>
-            </div>
-            <div class="feed-item">
-                <div class="feed-icon" style="background:#2ea043">🟡</div>
-                <div class="feed-content">
-                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(0s ago)</span> → 
-                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
-                    <span class="feed-user">Ambasel </span> 
-                    <b style="color:#2ea043">SOLD</b> 
-                    <span class="feed-vol">148,183 USDT</span> 
-                    @ <span class="feed-price">176.33 ETB</span>
-                </div>
-            </div>
-            <div class="feed-item">
-                <div class="feed-icon" style="background:#2ea043">🟡</div>
-                <div class="feed-content">
-                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(0s ago)</span> → 
-                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
-                    <span class="feed-user">Amana_Traders </span> 
-                    <b style="color:#2ea043">SOLD</b> 
-                    <span class="feed-vol">8,265 USDT</span> 
-                    @ <span class="feed-price">176.33 ETB</span>
-                </div>
-            </div>
-            <div class="feed-item">
-                <div class="feed-icon" style="background:#2ea043">🟡</div>
-                <div class="feed-content">
-                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(0s ago)</span> → 
-                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
-                    <span class="feed-user">Always-trade</span> 
-                    <b style="color:#2ea043">SOLD</b> 
-                    <span class="feed-vol">1,304,771 USDT</span> 
-                    @ <span class="feed-price">176.33 ETB</span>
-                </div>
-            </div>
-            <div class="feed-item">
-                <div class="feed-icon" style="background:#2ea043">🟡</div>
-                <div class="feed-content">
-                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(0s ago)</span> → 
-                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
-                    <span class="feed-user">ETHO  KENYAA</span> 
-                    <b style="color:#2ea043">SOLD</b> 
-                    <span class="feed-vol">1,300 USDT</span> 
-                    @ <span class="feed-price">176.33 ETB</span>
-                </div>
-            </div>
-            <div class="feed-item">
-                <div class="feed-icon" style="background:#2ea043">🟡</div>
-                <div class="feed-content">
-                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(0s ago)</span> → 
-                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
-                    <span class="feed-user">Aslam72</span> 
-                    <b style="color:#2ea043">SOLD</b> 
-                    <span class="feed-vol">9,197 USDT</span> 
-                    @ <span class="feed-price">176.33 ETB</span>
-                </div>
-            </div>
-            <div class="feed-item">
-                <div class="feed-icon" style="background:#2ea043">🟡</div>
-                <div class="feed-content">
-                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(0s ago)</span> → 
-                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
-                    <span class="feed-user">SKY-blue77</span> 
-                    <b style="color:#2ea043">SOLD</b> 
-                    <span class="feed-vol">21,815 USDT</span> 
-                    @ <span class="feed-price">176.33 ETB</span>
-                </div>
-            </div>
-            <div class="feed-item">
-                <div class="feed-icon" style="background:#2ea043">🟡</div>
-                <div class="feed-content">
-                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(0s ago)</span> → 
-                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
-                    <span class="feed-user">McM p7</span> 
-                    <b style="color:#2ea043">SOLD</b> 
-                    <span class="feed-vol">38,082 USDT</span> 
-                    @ <span class="feed-price">176.33 ETB</span>
-                </div>
-            </div>
-            <div class="feed-item">
-                <div class="feed-icon" style="background:#2ea043">🟡</div>
-                <div class="feed-content">
-                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(0s ago)</span> → 
-                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
-                    <span class="feed-user">HT2424</span> 
-                    <b style="color:#2ea043">SOLD</b> 
-                    <span class="feed-vol">4,991 USDT</span> 
-                    @ <span class="feed-price">176.33 ETB</span>
-                </div>
-            </div>
-            <div class="feed-item">
-                <div class="feed-icon" style="background:#2ea043">🟡</div>
-                <div class="feed-content">
-                    <span class="feed-ts">12:27:16 AM</span> <span style="color:#666">(9min ago)</span> → 
+                    <span class="feed-ts">12:40:16 AM</span> <span style="color:#666">(0s ago)</span> → 
                     <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
                     <span class="feed-user">ETHIO USD</span> 
                     <b style="color:#2ea043">SOLD</b> 
@@ -231,7 +96,7 @@
             <div class="feed-item">
                 <div class="feed-icon" style="background:#2ea043">🟡</div>
                 <div class="feed-content">
-                    <span class="feed-ts">12:27:16 AM</span> <span style="color:#666">(9min ago)</span> → 
+                    <span class="feed-ts">12:40:16 AM</span> <span style="color:#666">(0s ago)</span> → 
                     <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
                     <span class="feed-user">ETHIO USD</span> 
                     <b style="color:#2ea043">SOLD</b> 
@@ -242,7 +107,7 @@
             <div class="feed-item">
                 <div class="feed-icon" style="background:#2ea043">🟡</div>
                 <div class="feed-content">
-                    <span class="feed-ts">12:27:16 AM</span> <span style="color:#666">(9min ago)</span> → 
+                    <span class="feed-ts">12:40:16 AM</span> <span style="color:#666">(0s ago)</span> → 
                     <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
                     <span class="feed-user">Eye-Trader</span> 
                     <b style="color:#2ea043">SOLD</b> 
@@ -253,7 +118,7 @@
             <div class="feed-item">
                 <div class="feed-icon" style="background:#2ea043">🟡</div>
                 <div class="feed-content">
-                    <span class="feed-ts">12:27:16 AM</span> <span style="color:#666">(9min ago)</span> → 
+                    <span class="feed-ts">12:40:16 AM</span> <span style="color:#666">(0s ago)</span> → 
                     <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
                     <span class="feed-user">daily hustler </span> 
                     <b style="color:#2ea043">SOLD</b> 
@@ -264,7 +129,7 @@
             <div class="feed-item">
                 <div class="feed-icon" style="background:#2ea043">🟡</div>
                 <div class="feed-content">
-                    <span class="feed-ts">12:27:16 AM</span> <span style="color:#666">(9min ago)</span> → 
+                    <span class="feed-ts">12:40:16 AM</span> <span style="color:#666">(0s ago)</span> → 
                     <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
                     <span class="feed-user">daily hustler </span> 
                     <b style="color:#2ea043">SOLD</b> 
@@ -275,7 +140,7 @@
             <div class="feed-item">
                 <div class="feed-icon" style="background:#2ea043">🟡</div>
                 <div class="feed-content">
-                    <span class="feed-ts">12:27:16 AM</span> <span style="color:#666">(9min ago)</span> → 
+                    <span class="feed-ts">12:40:16 AM</span> <span style="color:#666">(0s ago)</span> → 
                     <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
                     <span class="feed-user">Ambasel </span> 
                     <b style="color:#2ea043">SOLD</b> 
@@ -286,7 +151,18 @@
             <div class="feed-item">
                 <div class="feed-icon" style="background:#2ea043">🟡</div>
                 <div class="feed-content">
-                    <span class="feed-ts">12:27:16 AM</span> <span style="color:#666">(9min ago)</span> → 
+                    <span class="feed-ts">12:40:16 AM</span> <span style="color:#666">(0s ago)</span> → 
+                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
+                    <span class="feed-user">sibuuBultii</span> 
+                    <b style="color:#2ea043">SOLD</b> 
+                    <span class="feed-vol">2,439 USDT</span> 
+                    @ <span class="feed-price">176.32 ETB</span>
+                </div>
+            </div>
+            <div class="feed-item">
+                <div class="feed-icon" style="background:#2ea043">🟡</div>
+                <div class="feed-content">
+                    <span class="feed-ts">12:40:16 AM</span> <span style="color:#666">(0s ago)</span> → 
                     <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
                     <span class="feed-user">Amana_Traders </span> 
                     <b style="color:#2ea043">SOLD</b> 
@@ -297,7 +173,7 @@
             <div class="feed-item">
                 <div class="feed-icon" style="background:#2ea043">🟡</div>
                 <div class="feed-content">
-                    <span class="feed-ts">12:27:16 AM</span> <span style="color:#666">(9min ago)</span> → 
+                    <span class="feed-ts">12:40:16 AM</span> <span style="color:#666">(0s ago)</span> → 
                     <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
                     <span class="feed-user">Always-trade</span> 
                     <b style="color:#2ea043">SOLD</b> 
@@ -308,7 +184,7 @@
             <div class="feed-item">
                 <div class="feed-icon" style="background:#2ea043">🟡</div>
                 <div class="feed-content">
-                    <span class="feed-ts">12:27:16 AM</span> <span style="color:#666">(9min ago)</span> → 
+                    <span class="feed-ts">12:40:16 AM</span> <span style="color:#666">(0s ago)</span> → 
                     <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
                     <span class="feed-user">ETHO  KENYAA</span> 
                     <b style="color:#2ea043">SOLD</b> 
@@ -319,7 +195,7 @@
             <div class="feed-item">
                 <div class="feed-icon" style="background:#2ea043">🟡</div>
                 <div class="feed-content">
-                    <span class="feed-ts">12:27:16 AM</span> <span style="color:#666">(9min ago)</span> → 
+                    <span class="feed-ts">12:40:16 AM</span> <span style="color:#666">(0s ago)</span> → 
                     <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
                     <span class="feed-user">Aslam72</span> 
                     <b style="color:#2ea043">SOLD</b> 
@@ -330,7 +206,7 @@
             <div class="feed-item">
                 <div class="feed-icon" style="background:#2ea043">🟡</div>
                 <div class="feed-content">
-                    <span class="feed-ts">12:27:16 AM</span> <span style="color:#666">(9min ago)</span> → 
+                    <span class="feed-ts">12:40:16 AM</span> <span style="color:#666">(0s ago)</span> → 
                     <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
                     <span class="feed-user">SKY-blue77</span> 
                     <b style="color:#2ea043">SOLD</b> 
@@ -341,7 +217,7 @@
             <div class="feed-item">
                 <div class="feed-icon" style="background:#2ea043">🟡</div>
                 <div class="feed-content">
-                    <span class="feed-ts">12:27:16 AM</span> <span style="color:#666">(9min ago)</span> → 
+                    <span class="feed-ts">12:40:16 AM</span> <span style="color:#666">(0s ago)</span> → 
                     <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
                     <span class="feed-user">McM p7</span> 
                     <b style="color:#2ea043">SOLD</b> 
@@ -352,7 +228,7 @@
             <div class="feed-item">
                 <div class="feed-icon" style="background:#2ea043">🟡</div>
                 <div class="feed-content">
-                    <span class="feed-ts">12:27:16 AM</span> <span style="color:#666">(9min ago)</span> → 
+                    <span class="feed-ts">12:40:16 AM</span> <span style="color:#666">(0s ago)</span> → 
                     <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
                     <span class="feed-user">HT2424</span> 
                     <b style="color:#2ea043">SOLD</b> 
@@ -363,59 +239,191 @@
             <div class="feed-item">
                 <div class="feed-icon" style="background:#2ea043">🟡</div>
                 <div class="feed-content">
-                    <span class="feed-ts">12:27:16 AM</span> <span style="color:#666">(9min ago)</span> → 
+                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(3min ago)</span> → 
                     <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
-                    <span class="feed-user">REAL-MONEY</span> 
+                    <span class="feed-user">ETHIO USD</span> 
                     <b style="color:#2ea043">SOLD</b> 
-                    <span class="feed-vol">330 USDT</span> 
+                    <span class="feed-vol">3,983 USDT</span> 
+                    @ <span class="feed-price">174.64 ETB</span>
+                </div>
+            </div>
+            <div class="feed-item">
+                <div class="feed-icon" style="background:#2ea043">🟡</div>
+                <div class="feed-content">
+                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(3min ago)</span> → 
+                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
+                    <span class="feed-user">ETHIO USD</span> 
+                    <b style="color:#2ea043">SOLD</b> 
+                    <span class="feed-vol">778 USDT</span> 
+                    @ <span class="feed-price">174.64 ETB</span>
+                </div>
+            </div>
+            <div class="feed-item">
+                <div class="feed-icon" style="background:#2ea043">🟡</div>
+                <div class="feed-content">
+                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(3min ago)</span> → 
+                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
+                    <span class="feed-user">Eye-Trader</span> 
+                    <b style="color:#2ea043">SOLD</b> 
+                    <span class="feed-vol">867 USDT</span> 
+                    @ <span class="feed-price">174.64 ETB</span>
+                </div>
+            </div>
+            <div class="feed-item">
+                <div class="feed-icon" style="background:#2ea043">🟡</div>
+                <div class="feed-content">
+                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(3min ago)</span> → 
+                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
+                    <span class="feed-user">daily hustler </span> 
+                    <b style="color:#2ea043">SOLD</b> 
+                    <span class="feed-vol">4,762 USDT</span> 
+                    @ <span class="feed-price">175.58 ETB</span>
+                </div>
+            </div>
+            <div class="feed-item">
+                <div class="feed-icon" style="background:#2ea043">🟡</div>
+                <div class="feed-content">
+                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(3min ago)</span> → 
+                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
+                    <span class="feed-user">daily hustler </span> 
+                    <b style="color:#2ea043">SOLD</b> 
+                    <span class="feed-vol">17,722 USDT</span> 
+                    @ <span class="feed-price">175.58 ETB</span>
+                </div>
+            </div>
+            <div class="feed-item">
+                <div class="feed-icon" style="background:#2ea043">🟡</div>
+                <div class="feed-content">
+                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(3min ago)</span> → 
+                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
+                    <span class="feed-user">Ambasel </span> 
+                    <b style="color:#2ea043">SOLD</b> 
+                    <span class="feed-vol">148,183 USDT</span> 
                     @ <span class="feed-price">176.33 ETB</span>
                 </div>
             </div>
             <div class="feed-item">
                 <div class="feed-icon" style="background:#2ea043">🟡</div>
                 <div class="feed-content">
-                    <span class="feed-ts">12:09:17 AM</span> <span style="color:#666">(27min ago)</span> → 
+                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(3min ago)</span> → 
                     <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
-                    <span class="feed-user">MAYA-Bit</span> 
+                    <span class="feed-user">Amana_Traders </span> 
                     <b style="color:#2ea043">SOLD</b> 
-                    <span class="feed-vol">66,740 USDT</span> 
+                    <span class="feed-vol">8,265 USDT</span> 
                     @ <span class="feed-price">176.33 ETB</span>
                 </div>
             </div>
             <div class="feed-item">
                 <div class="feed-icon" style="background:#2ea043">🟡</div>
                 <div class="feed-content">
-                    <span class="feed-ts">12:09:17 AM</span> <span style="color:#666">(27min ago)</span> → 
+                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(3min ago)</span> → 
                     <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
-                    <span class="feed-user">MAYA-Bit</span> 
+                    <span class="feed-user">Always-trade</span> 
                     <b style="color:#2ea043">SOLD</b> 
-                    <span class="feed-vol">2,047 USDT</span> 
+                    <span class="feed-vol">1,304,771 USDT</span> 
                     @ <span class="feed-price">176.33 ETB</span>
                 </div>
             </div>
             <div class="feed-item">
                 <div class="feed-icon" style="background:#2ea043">🟡</div>
                 <div class="feed-content">
-                    <span class="feed-ts">12:09:17 AM</span> <span style="color:#666">(27min ago)</span> → 
+                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(3min ago)</span> → 
                     <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
-                    <span class="feed-user">The Flash ETB </span> 
+                    <span class="feed-user">ETHO  KENYAA</span> 
                     <b style="color:#2ea043">SOLD</b> 
-                    <span class="feed-vol">18,155 USDT</span> 
+                    <span class="feed-vol">1,300 USDT</span> 
                     @ <span class="feed-price">176.33 ETB</span>
+                </div>
+            </div>
+            <div class="feed-item">
+                <div class="feed-icon" style="background:#2ea043">🟡</div>
+                <div class="feed-content">
+                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(3min ago)</span> → 
+                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
+                    <span class="feed-user">Aslam72</span> 
+                    <b style="color:#2ea043">SOLD</b> 
+                    <span class="feed-vol">9,197 USDT</span> 
+                    @ <span class="feed-price">176.33 ETB</span>
+                </div>
+            </div>
+            <div class="feed-item">
+                <div class="feed-icon" style="background:#2ea043">🟡</div>
+                <div class="feed-content">
+                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(3min ago)</span> → 
+                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
+                    <span class="feed-user">SKY-blue77</span> 
+                    <b style="color:#2ea043">SOLD</b> 
+                    <span class="feed-vol">21,815 USDT</span> 
+                    @ <span class="feed-price">176.33 ETB</span>
+                </div>
+            </div>
+            <div class="feed-item">
+                <div class="feed-icon" style="background:#2ea043">🟡</div>
+                <div class="feed-content">
+                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(3min ago)</span> → 
+                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
+                    <span class="feed-user">McM p7</span> 
+                    <b style="color:#2ea043">SOLD</b> 
+                    <span class="feed-vol">38,082 USDT</span> 
+                    @ <span class="feed-price">176.33 ETB</span>
+                </div>
+            </div>
+            <div class="feed-item">
+                <div class="feed-icon" style="background:#2ea043">🟡</div>
+                <div class="feed-content">
+                    <span class="feed-ts">12:36:49 AM</span> <span style="color:#666">(3min ago)</span> → 
+                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
+                    <span class="feed-user">HT2424</span> 
+                    <b style="color:#2ea043">SOLD</b> 
+                    <span class="feed-vol">4,991 USDT</span> 
+                    @ <span class="feed-price">176.33 ETB</span>
+                </div>
+            </div>
+            <div class="feed-item">
+                <div class="feed-icon" style="background:#2ea043">🟡</div>
+                <div class="feed-content">
+                    <span class="feed-ts">12:27:16 AM</span> <span style="color:#666">(13min ago)</span> → 
+                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
+                    <span class="feed-user">ETHIO USD</span> 
+                    <b style="color:#2ea043">SOLD</b> 
+                    <span class="feed-vol">3,983 USDT</span> 
+                    @ <span class="feed-price">174.63 ETB</span>
+                </div>
+            </div>
+            <div class="feed-item">
+                <div class="feed-icon" style="background:#2ea043">🟡</div>
+                <div class="feed-content">
+                    <span class="feed-ts">12:27:16 AM</span> <span style="color:#666">(13min ago)</span> → 
+                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
+                    <span class="feed-user">ETHIO USD</span> 
+                    <b style="color:#2ea043">SOLD</b> 
+                    <span class="feed-vol">778 USDT</span> 
+                    @ <span class="feed-price">174.63 ETB</span>
+                </div>
+            </div>
+            <div class="feed-item">
+                <div class="feed-icon" style="background:#2ea043">🟡</div>
+                <div class="feed-content">
+                    <span class="feed-ts">12:27:16 AM</span> <span style="color:#666">(13min ago)</span> → 
+                    <span class="feed-source" style="color:#f3ba2f;font-weight:bold">Binance</span>: 
+                    <span class="feed-user">Eye-Trader</span> 
+                    <b style="color:#2ea043">SOLD</b> 
+                    <span class="feed-vol">867 USDT</span> 
+                    @ <span class="feed-price">174.63 ETB</span>
                 </div>
             </div></div>
                 </div>
             </div>
 
             <footer>
-                Official: 153.28 ETB | Last Update: 2025-11-25 00:36:49 UTC | 
+                Official: 153.28 ETB | Last Update: 2025-11-25 00:40:17 UTC | 
                 Tracking inventory drops (45s window, 1hr history)
             </footer>
         </div>
 
         <script>
-            const imgDark = "etb_neon_terminal.png?v=1764031009";
-            const imgLight = "etb_light_terminal.png?v=1764031009";
+            const imgDark = "etb_neon_terminal.png?v=1764031217";
+            const imgLight = "etb_light_terminal.png?v=1764031217";
             const html = document.documentElement;
             
             (function() {
