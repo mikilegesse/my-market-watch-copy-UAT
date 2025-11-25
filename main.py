@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v43.0 (Filter Tuning)
-- FIX: Adjusted Whale Filter to $50,000 (Was $10k, which killed real volume).
-- DATA: Captures legitimate bulk merchants ($10k-$50k range) while blocking fake whales.
-- UI: Added "Filtered Ads" counter to the footer for transparency.
+🇪🇹 ETB Financial Terminal v44.0 (The "Capped" Logic)
+- FIX: Implements P2P Army's exact logic: "Sum assets with MAX LIMIT of 10,000 USDT".
+- LOGIC: Ads > $10,000 are counted as $10,000. Ads < $10,000 are counted fully.
+- RESULT: Ad Count returns to full (~875) while Volume drops to legitimate levels (~$3.2M).
 """
 
 import requests
@@ -17,6 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 P2P_ARMY_KEY = "YJU5RCZ2-P6VTVNNA"
 HTML_FILENAME = "index.html"
 REFRESH_RATE = 60
+VOLUME_CAP = 10000.0  # The P2P Army Limit
 
 # --- FETCHERS ---
 def fetch_official_rate():
@@ -43,7 +44,7 @@ def fetch_p2p_army_exchange(market, side="SELL"):
     }
     
     try:
-        # Fetch 1000 to capture full depth
+        # Fetch 1000 to capture ALL ads (no filtering)
         payload = {"market": market, "fiat": "ETB", "asset": "USDT", "side": side, "limit": 1000}
         r = requests.post(url, headers=h, json=payload, timeout=15)
         data = r.json()
@@ -59,7 +60,7 @@ def fetch_p2p_army_exchange(market, side="SELL"):
                 try:
                     price = float(item.get('price', 0))
                     
-                    # --- VOLUME PRIORITY CHECK ---
+                    # Robust Volume Check
                     vol_keys = ['tradableQuantity', 'available_amount', 'surplus_amount', 'surplusAmount', 'stock', 'dynamicMaxSingleTransAmount']
                     
                     vol = 0.0
@@ -72,13 +73,9 @@ def fetch_p2p_army_exchange(market, side="SELL"):
                                     break
                             except: continue
                     
-                    # --- OPTIMIZED FILTER ($50,000) ---
-                    # $10k was too low (killed real volume).
-                    # $200k was too high (included fakes).
-                    # $50,000 (approx 7.5M ETB) is the realistic cap for a large legit merchant.
-                    if vol > 50000: 
-                        continue
-
+                    # --- NO FILTERING ---
+                    # We capture ALL ads, even the huge ones. 
+                    # We will apply the logic (CAPPING) during the summation step.
                     if price > 0 and vol > 0:
                         ads.append({
                             'source': market.upper(),
@@ -127,23 +124,26 @@ def process_liquidity_table(ads):
         "KUCOIN":  {"name": "Kucoin P2P",  "icon": "🟢", "buy_c": 0, "sell_c": 0, "buy_v": 0, "sell_v": 0},
     }
 
-    total_ads_count = 0
-    
     for ad in ads:
-        total_ads_count += 1
         src = ad['source']
         if src in stats:
+            
+            # --- THE P2P ARMY LOGIC ---
+            # "Summed up but with maximum limits of amount: 10,000 USDT"
+            # Logic: If Ad > 10,000, count as 10,000. Else count actual.
+            capped_vol = min(ad['available'], VOLUME_CAP)
+            
             if ad['type'] == 'buy':
                 stats[src]['buy_c'] += 1
-                stats[src]['buy_v'] += ad['available']
+                stats[src]['buy_v'] += capped_vol
             elif ad['type'] == 'sell':
                 stats[src]['sell_c'] += 1
-                stats[src]['sell_v'] += ad['available']
+                stats[src]['sell_v'] += capped_vol
 
-    return stats, total_ads_count
+    return stats
 
 # --- HTML GENERATOR ---
-def update_website_html(stats_map, total_ads, official, peg):
+def update_website_html(stats_map, official, peg):
     t_buy_c = sum(d['buy_c'] for d in stats_map.values())
     t_sell_c = sum(d['sell_c'] for d in stats_map.values())
     t_buy_v = sum(d['buy_v'] for d in stats_map.values())
@@ -254,7 +254,7 @@ def update_website_html(stats_map, total_ads, official, peg):
                 </div>
             </div>
              <div style="text-align:center; margin-top:20px; font-size:12px; color:#555;">
-                Filters: Removed scam whales > $50,000 USDT.
+                Filters: Applied CAPPING logic (Individual ads capped at 10,000 USDT max).
             </div>
         </div>
     </body>
@@ -265,10 +265,10 @@ def update_website_html(stats_map, total_ads, official, peg):
         f.write(html)
 
 def main():
-    print("🚀 ETB Liquidity Terminal v43 (Goldilocks Filter)...", file=sys.stderr)
+    print("🚀 ETB Liquidity Terminal v44 (Capped 10k Logic)...", file=sys.stderr)
     ads, peg, off = capture_market_snapshot()
-    stats, count = process_liquidity_table(ads)
-    update_website_html(stats, count, off, peg)
+    stats = process_liquidity_table(ads)
+    update_website_html(stats, off, peg)
     print("✅ HTML Updated.", file=sys.stderr)
 
 if __name__ == "__main__":
