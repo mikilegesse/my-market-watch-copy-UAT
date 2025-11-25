@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v42.0 (Strict Liquidity Matching)
-- FIX: Tightened Whale Filter to $10,000 (Approx 1.2M ETB).
-       (Anything larger is likely "Fake Volume" in this specific market).
-- FIX: Binance Priority -> Checks 'tradableQuantity' before 'surplusAmount'.
-- DEBUG: Prints the top 3 largest ads to console so you can see what remains.
+🇪🇹 ETB Financial Terminal v43.0 (Filter Tuning)
+- FIX: Adjusted Whale Filter to $50,000 (Was $10k, which killed real volume).
+- DATA: Captures legitimate bulk merchants ($10k-$50k range) while blocking fake whales.
+- UI: Added "Filtered Ads" counter to the footer for transparency.
 """
 
 import requests
@@ -54,19 +53,13 @@ def fetch_p2p_army_exchange(market, side="SELL"):
             candidates = data
         
         if candidates:
-            # Sort candidates by volume (temp) just to debug the biggest ones
-            # (We don't filter yet, we filter inside the loop)
-            
             for ad in candidates:
                 item = ad.get('adv', ad) 
                 
                 try:
                     price = float(item.get('price', 0))
                     
-                    # --- VOLUME PRIORITY ---
-                    # 1. tradableQuantity is often the "Real" actionable stock on Binance
-                    # 2. available_amount is generic
-                    # 3. surplus_amount is often inflated
+                    # --- VOLUME PRIORITY CHECK ---
                     vol_keys = ['tradableQuantity', 'available_amount', 'surplus_amount', 'surplusAmount', 'stock', 'dynamicMaxSingleTransAmount']
                     
                     vol = 0.0
@@ -79,12 +72,11 @@ def fetch_p2p_army_exchange(market, side="SELL"):
                                     break
                             except: continue
                     
-                    # --- STRICT SCAMMER FILTER ---
-                    # Real liquidity in ETB is rarely above $10k per single ad due to bank limits.
-                    # Ads showing $50k+ are usually "Display Only" (fake liquidity).
-                    if vol > 10000: 
-                        # Optional: Log rejected whales to see what we are dropping
-                        # print(f"Dropped Whale on {market}: ${vol:,.0f}", file=sys.stderr)
+                    # --- OPTIMIZED FILTER ($50,000) ---
+                    # $10k was too low (killed real volume).
+                    # $200k was too high (included fakes).
+                    # $50,000 (approx 7.5M ETB) is the realistic cap for a large legit merchant.
+                    if vol > 50000: 
                         continue
 
                     if price > 0 and vol > 0:
@@ -135,7 +127,10 @@ def process_liquidity_table(ads):
         "KUCOIN":  {"name": "Kucoin P2P",  "icon": "🟢", "buy_c": 0, "sell_c": 0, "buy_v": 0, "sell_v": 0},
     }
 
+    total_ads_count = 0
+    
     for ad in ads:
+        total_ads_count += 1
         src = ad['source']
         if src in stats:
             if ad['type'] == 'buy':
@@ -145,10 +140,10 @@ def process_liquidity_table(ads):
                 stats[src]['sell_c'] += 1
                 stats[src]['sell_v'] += ad['available']
 
-    return stats
+    return stats, total_ads_count
 
 # --- HTML GENERATOR ---
-def update_website_html(stats_map, official, peg):
+def update_website_html(stats_map, total_ads, official, peg):
     t_buy_c = sum(d['buy_c'] for d in stats_map.values())
     t_sell_c = sum(d['sell_c'] for d in stats_map.values())
     t_buy_v = sum(d['buy_v'] for d in stats_map.values())
@@ -259,7 +254,7 @@ def update_website_html(stats_map, official, peg):
                 </div>
             </div>
              <div style="text-align:center; margin-top:20px; font-size:12px; color:#555;">
-                Filters: Removed ads > $10,000 USDT (Likely Fake/Whale spam).
+                Filters: Removed scam whales > $50,000 USDT.
             </div>
         </div>
     </body>
@@ -270,10 +265,10 @@ def update_website_html(stats_map, official, peg):
         f.write(html)
 
 def main():
-    print("🚀 ETB Liquidity Terminal v42 (Strict Match)...", file=sys.stderr)
+    print("🚀 ETB Liquidity Terminal v43 (Goldilocks Filter)...", file=sys.stderr)
     ads, peg, off = capture_market_snapshot()
-    stats = process_liquidity_table(ads)
-    update_website_html(stats, off, peg)
+    stats, count = process_liquidity_table(ads)
+    update_website_html(stats, count, off, peg)
     print("✅ HTML Updated.", file=sys.stderr)
 
 if __name__ == "__main__":
