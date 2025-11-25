@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v37.0 (Complete Edition)
+🇪🇹 ETB Financial Terminal v37.2 (Bug Fix Edition)
+- FIXED: Source filter now works (case-insensitive)
+- FIXED: Restored original terminal fonts and colors
+- FIXED: Added time filter clarification (affects feed only)
 - EXCHANGES: Binance, MEXC, OKX (all via p2p.army API)
 - TICKER: NYSE-style sliding rate ticker at top
 - CHARTS: Interactive tooltips on hover
 - TRACKING: Buy + Sell with proper feed display
-- UI: Enhanced Robinhood-style interface
+- UI: Enhanced terminal-style interface
 """
 
 import requests
@@ -489,7 +492,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
         <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="refresh" content="300">
-        <title>ETB Market v37 - Complete Edition</title>
+        <title>ETB Market v37.2 - Terminal Edition</title>
         <style>
             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
             
@@ -800,6 +803,10 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                 font-size: 18px;
                 font-weight: 700;
                 margin-bottom: 15px;
+                color: #00ff9d;
+                font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
+                letter-spacing: 1px;
+                text-transform: uppercase;
             }}
             
             .feed-container {{
@@ -870,20 +877,27 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             
             .feed-text {{
                 color: var(--text);
+                font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
+                font-size: 13px;
+                font-weight: 500;
             }}
             
             .feed-user {{
-                font-weight: 600;
-                color: var(--text);
+                font-weight: 700;
+                color: #00ff9d;
+                font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
             }}
             
             .feed-amount {{
                 font-weight: 700;
-                color: var(--accent);
+                color: #00bfff;
+                font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
             }}
             
             .feed-price {{
                 font-weight: 600;
+                color: var(--text);
+                font-family: 'Courier New', 'Monaco', 'Menlo', monospace;
             }}
             
             footer {{
@@ -965,6 +979,9 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                         <button class="time-btn" data-period="3m" onclick="filterTrades('3m')">3M</button>
                         <button class="time-btn" data-period="ytd" onclick="filterTrades('ytd')">YTD</button>
                         <button class="time-btn" data-period="1y" onclick="filterTrades('1y')">1Y</button>
+                        <div style="color:var(--text-secondary);font-size:11px;margin-top:8px;font-style:italic;">
+                            Filters feed activity • Chart shows full 24h history
+                        </div>
                     </div>
                     
                     <div class="chart-card">
@@ -1032,7 +1049,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             
             <footer>
                 Official Rate: {official:.2f} ETB | Last Update: {timestamp} UTC<br>
-                v37.0 Complete Edition • Binance, MEXC, OKX • 45s tracking, 24h history
+                v37.2 Bug Fix Edition • Binance, MEXC, OKX • 45s tracking, 24h history
             </footer>
         </div>
         
@@ -1042,6 +1059,15 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             const imgLight = "{GRAPH_LIGHT_FILENAME}?v={cache_buster}";
             let currentPeriod = 'live';
             let currentSource = 'all';
+            
+            // Debug: Log trade sources
+            console.log('Total trades loaded:', allTrades.length);
+            const sourceCounts = {{}};
+            allTrades.forEach(t => {{
+                const src = t.source || 'UNKNOWN';
+                sourceCounts[src] = (sourceCounts[src] || 0) + 1;
+            }});
+            console.log('Trades by source:', sourceCounts);
             
             function toggleTheme() {{
                 const html = document.documentElement;
@@ -1110,7 +1136,14 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                 }});
                 
                 if (currentSource !== 'all') {{
-                    filtered = filtered.filter(t => t.source === currentSource);
+                    filtered = filtered.filter(t => {{
+                        // Case-insensitive comparison for robustness
+                        const tradeSource = (t.source || '').toUpperCase();
+                        const filterSource = currentSource.toUpperCase();
+                        return tradeSource === filterSource;
+                    }});
+                    
+                    console.log(`Filtered by ${currentSource}: ${filtered.length} trades`);
                 }}
                 
                 renderFeed(filtered);
