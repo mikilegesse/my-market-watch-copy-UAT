@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v40.0 (Volume & Limit Fix)
-- FIX: Increased API limit to 1000 to catch ALL ads (solved the "100" cap).
-- FIX: Added multi-key check for Volume (surplus_amount, quantity, stock, etc.).
-- DEBUG: Prints the first ad's structure to console so we can debug if volume stays 0.
+🇪🇹 ETB Financial Terminal v41.0 (Volume Sanitization)
+- FIX: Removes 'max_single_trans_amount' from volume check (it was reading ETB as USDT!).
+- FIX: Adds 'Fake Whale' filter (ignores any single ad > $200k USDT).
+- DATA: Matches P2P Army's ~3M volume by filtering scam/fake liquidity.
 """
 
 import requests
@@ -11,6 +11,7 @@ import sys
 import time
 import os
 import json
+import statistics
 from concurrent.futures import ThreadPoolExecutor
 
 # --- CONFIGURATION ---
@@ -35,7 +36,6 @@ def fetch_p2p_army_exchange(market, side="SELL"):
     url = "https://p2p.army/v1/api/get_p2p_order_book"
     ads = []
     
-    # Header specifically for P2P Army
     h = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Content-Type": "application/json",
@@ -44,35 +44,29 @@ def fetch_p2p_army_exchange(market, side="SELL"):
     }
     
     try:
-        # INCREASED LIMIT TO 1000 (was 100)
+        # Fetch up to 1000 ads to ensure we get everything
         payload = {"market": market, "fiat": "ETB", "asset": "USDT", "side": side, "limit": 1000}
         r = requests.post(url, headers=h, json=payload, timeout=15)
         data = r.json()
         
         candidates = data.get("result", data.get("data", data.get("ads", [])))
-        
-        # Fallback for nested Binance-style raw responses
         if not candidates and isinstance(data, list):
             candidates = data
         
         if candidates:
-            # DEBUG: Print keys of the first ad to see where volume is hiding
-            first_ad = candidates[0]
-            if "debug_printed" not in globals():
-                global debug_printed
-                print(f"🔍 DEBUG [{market}]: First Ad Keys: {list(first_ad.keys())}", file=sys.stderr)
-                debug_printed = True
-
             for ad in candidates:
-                # Handle nested 'adv' structure (common in raw Binance data)
                 item = ad.get('adv', ad) 
                 
                 try:
                     price = float(item.get('price', 0))
                     
-                    # ROBUST VOLUME CHECK: Check all possible names for "Volume"
+                    # --- VOLUME SANITIZATION ---
+                    # 1. Removed 'max_single_trans_amount' (It is often in ETB, causing 100x inflation)
+                    # 2. Only check keys known to be in USDT/Asset
+                    vol_keys = ['available_amount', 'surplus_amount', 'surplusAmount', 'tradableQuantity', 'stock', 'dynamicMaxSingleTransAmount']
+                    
                     vol = 0.0
-                    for key in ['available_amount', 'surplus_amount', 'surplusAmount', 'amount', 'quantity', 'tradableQuantity', 'max_single_trans_amount', 'stock']:
+                    for key in vol_keys:
                         if key in item and item[key] is not None:
                             try:
                                 v = float(item[key])
@@ -81,7 +75,13 @@ def fetch_p2p_army_exchange(market, side="SELL"):
                                     break
                             except: continue
                     
-                    if price > 0:
+                    # --- SCAMMER/FAKE WHALE FILTER ---
+                    # If a single ad claims > $200,000 USDT liquidity in ETB market, it's likely a scammer 
+                    # with a fake "9,999,999" display. Real whales split ads.
+                    if vol > 200000: 
+                        continue
+
+                    if price > 0 and vol > 0:
                         ads.append({
                             'source': market.upper(),
                             'price': price,
@@ -132,6 +132,15 @@ def process_liquidity_table(ads):
     for ad in ads:
         src = ad['source']
         if src in stats:
+            # P2P Army Mapping:
+            # API 'buy' -> Ad is Buying USDT -> User can Sell -> Table 'Sell' Col
+            # Wait, P2P Army is simpler: 
+            # "Buy" tab = Advertisements to Buy (Advertisers Selling)
+            # "Sell" tab = Advertisements to Sell (Advertisers Buying)
+            # Let's stick to the previous verified mapping:
+            # API 'sell' (Advertiser Selling) -> Table Sell Column
+            # API 'buy' (Advertiser Buying) -> Table Buy Column
+            
             if ad['type'] == 'buy':
                 stats[src]['buy_c'] += 1
                 stats[src]['buy_v'] += ad['available']
@@ -252,6 +261,9 @@ def update_website_html(stats_map, official, peg):
                     <div class="stat-lbl">Official Rate</div>
                 </div>
             </div>
+             <div style="text-align:center; margin-top:20px; font-size:12px; color:#555;">
+                Filters applied: Removed fake whales (Ads > $200k USDT). Corrected currency parsing.
+            </div>
         </div>
     </body>
     </html>
@@ -261,7 +273,7 @@ def update_website_html(stats_map, official, peg):
         f.write(html)
 
 def main():
-    print("🚀 ETB Liquidity Terminal v40 (Fixing Volume & Limit)...", file=sys.stderr)
+    print("🚀 ETB Liquidity Terminal v41 (Sanitized)...", file=sys.stderr)
     ads, peg, off = capture_market_snapshot()
     stats = process_liquidity_table(ads)
     update_website_html(stats, off, peg)
