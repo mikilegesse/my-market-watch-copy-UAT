@@ -3,589 +3,248 @@
     <html lang="en">
     <head>
         <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <meta http-equiv="refresh" content="300">
-        <title>ETB P2P Terminal</title>
+        <title>ETB P2P Market Liquidity</title>
+        <meta http-equiv="refresh" content="60">
         <style>
-            :root { --bg: #000; --card: #111; --text: #fff; --green: #00C805; --red: #FF3B30; --accent: #0A84FF; --border: #333; }
-            [data-theme="light"] { --bg: #f2f2f7; --card: #fff; --text: #000; --green: #34C759; --red: #FF3B30; --accent: #007AFF; --border: #ccc; }
-            body { background: var(--bg); color: var(--text); font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 20px; }
-            .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; max-width: 1400px; margin: 0 auto; }
-            .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
-            .price-display { font-size: 48px; font-weight: bold; margin: 10px 0; }
-            table { width: 100%; border-collapse: collapse; font-size: 14px; }
-            th { text-align: left; padding: 10px; color: var(--text-secondary); border-bottom: 1px solid var(--border); }
-            td { padding: 10px; border-bottom: 1px solid var(--border); }
-            .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-            .stat-box { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; text-align: center; border: 1px solid var(--border); }
-            .stat-val { font-size: 24px; font-weight: bold; display: block; }
-            .stat-lbl { font-size: 12px; opacity: 0.7; text-transform: uppercase; }
-            .feed-item { display: flex; align-items: center; gap: 10px; padding: 10px; border-bottom: 1px solid var(--border); }
-            @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+            body {
+                background-color: #1a1a2e;
+                color: #e0e0e0;
+                font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                margin: 0;
+                padding: 40px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+            .container {
+                max-width: 1200px;
+                width: 100%;
+            }
+            .header {
+                text-align: center;
+                margin-bottom: 30px;
+            }
+            .header h1 { margin: 0; font-size: 28px; }
+            .header p { color: #a0a0b0; font-size: 14px; margin-top: 5px; }
+            
+            /* P2P ARMY STYLE TABLE */
+            .p2p-table {
+                width: 100%;
+                border-collapse: collapse;
+                background-color: #262640;
+                border-radius: 8px;
+                overflow: hidden;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            }
+            
+            /* Header Groups */
+            .thead-dark {
+                background-color: #362b59; /* The purple top bar */
+            }
+            
+            th {
+                padding: 15px;
+                color: #fff;
+                font-weight: 600;
+                font-size: 14px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            
+            .group-header {
+                background-color: #42356b;
+                border-bottom: 1px solid #55448a;
+                text-align: center;
+            }
+            
+            td {
+                padding: 12px 15px;
+                border-bottom: 1px solid #363655;
+                font-size: 14px;
+            }
+            
+            tr:last-child td { border-bottom: none; }
+            tr:hover td { background-color: #303050; }
+            
+            .stats-card {
+                background: #22223a;
+                border: 1px solid #333355;
+                padding: 20px;
+                border-radius: 10px;
+                margin-top: 20px;
+                display: flex;
+                justify-content: space-around;
+            }
+            .stat-item { text-align: center; }
+            .stat-val { font-size: 24px; font-weight: bold; color: #fff; }
+            .stat-lbl { font-size: 12px; color: #888; text-transform: uppercase; margin-top: 5px; }
+            
         </style>
     </head>
     <body>
-        <div class="grid">
-            <div>
-                <div class="card">
-                    <div style="opacity:0.6">MEDIAN RATE</div>
-                    <div class="price-display">174.67 ETB</div>
-                    <div style="display:flex; gap:15px; font-size:14px;">
-                        <span>Official: 153.41</span>
-                        <span style="color:var(--accent)">Premium: +13.9%</span>
-                    </div>
-                </div>
-
-                <div class="card">
-                     <img src="etb_neon_terminal.png?v=1764096323" style="width:100%; border-radius:8px;">
-                </div>
-
-                <div class="card">
-                    <h3>Ads Count & Volume (Live Order Book)</h3>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th width="20%">P2P Exchange</th>
-                                <th style="text-align:right">Buy Ads</th>
-                                <th style="text-align:right">Sell Ads</th>
-                                <th style="text-align:right">Total</th>
-                                <th style="text-align:right;color:var(--green)">**Buy Vol</th>
-                                <th style="text-align:right;color:var(--red)">**Sell Vol</th>
-                                <th style="text-align:right">Total Vol</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-        <tr>
-            <td><span style="opacity:0.5;margin-right:10px">#1</span> 🟡 BINANCE</td>
-            <td style="text-align:right">2</td>
-            <td style="text-align:right">100</td>
-            <td style="text-align:right;font-weight:bold;color:var(--text-secondary)">102</td>
-            <td style="text-align:right;color:var(--green)">$0</td>
-            <td style="text-align:right;color:var(--red)">$0</td>
-            <td style="text-align:right;font-weight:bold">$0</td>
-        </tr>
-        
-        <tr>
-            <td><span style="opacity:0.5;margin-right:10px">#2</span> 🔵 MEXC</td>
-            <td style="text-align:right">59</td>
-            <td style="text-align:right">41</td>
-            <td style="text-align:right;font-weight:bold;color:var(--text-secondary)">100</td>
-            <td style="text-align:right;color:var(--green)">$0</td>
-            <td style="text-align:right;color:var(--red)">$0</td>
-            <td style="text-align:right;font-weight:bold">$0</td>
-        </tr>
-        
-        <tr>
-            <td><span style="opacity:0.5;margin-right:10px">#3</span> 🟣 OKX</td>
-            <td style="text-align:right">0</td>
-            <td style="text-align:right">86</td>
-            <td style="text-align:right;font-weight:bold;color:var(--text-secondary)">86</td>
-            <td style="text-align:right;color:var(--green)">$0</td>
-            <td style="text-align:right;color:var(--red)">$0</td>
-            <td style="text-align:right;font-weight:bold">$0</td>
-        </tr>
-        
-    <tr style="background:var(--card-hover);border-top:2px solid var(--accent)">
-        <td><b>TOTAL</b></td>
-        <td style="text-align:right"><b>61</b></td>
-        <td style="text-align:right"><b>227</b></td>
-        <td style="text-align:right"><b>288</b></td>
-        <td style="text-align:right;color:var(--green)"><b>$0</b></td>
-        <td style="text-align:right;color:var(--red)"><b>$0</b></td>
-        <td style="text-align:right;color:var(--accent)"><b>$0</b></td>
-    </tr>
-    </tbody>
-                    </table>
-                </div>
+        <div class="container">
+            <div class="header">
+                <h1>Statistics of volumes and activity of ETB on P2P markets</h1>
+                <p>The table displays ETB (Ethiopian birr) activity, the number and volume of advertisements on P2P crypto exchanges.</p>
             </div>
 
-            <div>
-                <div class="card">
-                    <h3>Transaction Stats (24h)</h3>
-                    <div style="margin-bottom:15px">
-                        <div style="color:var(--green); font-weight:bold; margin-bottom:5px">🟢 Buys</div>
-                        <div class="stat-grid" style="grid-template-columns: 1fr 1fr;">
-                            <div class="stat-box">
-                                <span class="stat-val" style="color:var(--green)">468</span>
-                                <span class="stat-lbl">Today</span>
-                            </div>
-                            <div class="stat-box">
-                                <span class="stat-val" style="color:var(--green)">$40204.1k</span>
-                                <span class="stat-lbl">Vol</span>
-                            </div>
-                        </div>
-                    </div>
-                    <div>
-                        <div style="color:var(--red); font-weight:bold; margin-bottom:5px">🔴 Sells</div>
-                        <div class="stat-grid" style="grid-template-columns: 1fr 1fr;">
-                            <div class="stat-box">
-                                <span class="stat-val" style="color:var(--red)">614</span>
-                                <span class="stat-lbl">Today</span>
-                            </div>
-                            <div class="stat-box">
-                                <span class="stat-val" style="color:var(--red)">$47225.8k</span>
-                                <span class="stat-lbl">Vol</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card">
-                    <h3>Recent Activity</h3>
-                    <div style="max-height:500px; overflow-y:auto">
+            <table class="p2p-table">
+                <thead>
+                    <tr class="thead-dark">
+                        <th rowspan="2" style="width: 50px;">#</th>
+                        <th rowspan="2" style="text-align:left">P2P Exchange</th>
+                        <th colspan="3" class="group-header" style="background: #33334d;">Ads Count</th>
+                        <th colspan="3" class="group-header" style="background: #4a3b78;">**Ads Volume (USDT)</th>
+                    </tr>
+                    <tr class="thead-dark">
+                        <th style="background:#2a2a40; text-align:right; font-size:12px; color:#aaa;">Buy</th>
+                        <th style="background:#2a2a40; text-align:right; font-size:12px; color:#aaa;">Sell</th>
+                        <th style="background:#2a2a40; text-align:right; font-size:12px; color:#fff;">Total</th>
                         
-        <div class="feed-item">
-            <div style="background:var(--green)22; color:var(--green); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↗</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>165m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--green)">BUY</span> 
-                    $10
-                </div>
-                <div style="font-size:12px">@ 173.74 ETB</div>
-            </div>
-        </div>
+                        <th style="background:#3d3063; text-align:right; font-size:12px; color:#aaa;">**Buy</th>
+                        <th style="background:#3d3063; text-align:right; font-size:12px; color:#aaa;">**Sell</th>
+                        <th style="background:#3d3063; text-align:right; font-size:12px; color:#fff;">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+        <tr>
+            <td style="text-align:center; opacity:0.5">1</td>
+            <td style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:18px">🟡</span> <b>Binance P2P</b>
+            </td>
+            
+            <td style="text-align:right">5</td>
+            <td style="text-align:right">100</td>
+            <td style="text-align:right; font-weight:bold">105</td>
+            
+            <td style="text-align:right"><span style="opacity:0.3">-</span></td>
+            <td style="text-align:right"><span style="opacity:0.3">-</span></td>
+            <td style="text-align:right; font-weight:bold"><span style="opacity:0.3">-</span></td>
+        </tr>
         
-        <div class="feed-item">
-            <div style="background:var(--red)22; color:var(--red); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↘</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>165m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--red)">SELL</span> 
-                    $3,000
-                </div>
-                <div style="font-size:12px">@ 173.78 ETB</div>
-            </div>
-        </div>
+        <tr>
+            <td style="text-align:center; opacity:0.5">2</td>
+            <td style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:18px">⚫</span> <b>Okx P2P</b>
+            </td>
+            
+            <td style="text-align:right">1</td>
+            <td style="text-align:right">99</td>
+            <td style="text-align:right; font-weight:bold">100</td>
+            
+            <td style="text-align:right"><span style="opacity:0.3">-</span></td>
+            <td style="text-align:right"><span style="opacity:0.3">-</span></td>
+            <td style="text-align:right; font-weight:bold"><span style="opacity:0.3">-</span></td>
+        </tr>
         
-        <div class="feed-item">
-            <div style="background:var(--green)22; color:var(--green); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↗</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>165m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--green)">BUY</span> 
-                    $439
-                </div>
-                <div style="font-size:12px">@ 173.78 ETB</div>
-            </div>
-        </div>
+        <tr>
+            <td style="text-align:center; opacity:0.5">3</td>
+            <td style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:18px">🟢</span> <b>Mexc P2P</b>
+            </td>
+            
+            <td style="text-align:right">60</td>
+            <td style="text-align:right">56</td>
+            <td style="text-align:right; font-weight:bold">116</td>
+            
+            <td style="text-align:right"><span style="opacity:0.3">-</span></td>
+            <td style="text-align:right"><span style="opacity:0.3">-</span></td>
+            <td style="text-align:right; font-weight:bold"><span style="opacity:0.3">-</span></td>
+        </tr>
         
-        <div class="feed-item">
-            <div style="background:var(--green)22; color:var(--green); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↗</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>165m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--green)">BUY</span> 
-                    $500,000
-                </div>
-                <div style="font-size:12px">@ 173.78 ETB</div>
-            </div>
-        </div>
+        <tr>
+            <td style="text-align:center; opacity:0.5">4</td>
+            <td style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:18px">⚫</span> <b>Bybit P2P</b>
+            </td>
+            
+            <td style="text-align:right"><span style="opacity:0.3">-</span></td>
+            <td style="text-align:right"><span style="opacity:0.3">-</span></td>
+            <td style="text-align:right; font-weight:bold"><span style="opacity:0.3">-</span></td>
+            
+            <td style="text-align:right"><span style="opacity:0.3">-</span></td>
+            <td style="text-align:right"><span style="opacity:0.3">-</span></td>
+            <td style="text-align:right; font-weight:bold"><span style="opacity:0.3">-</span></td>
+        </tr>
         
-        <div class="feed-item">
-            <div style="background:var(--red)22; color:var(--red); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↘</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>165m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--red)">SELL</span> 
-                    $2,355
-                </div>
-                <div style="font-size:12px">@ 173.78 ETB</div>
-            </div>
-        </div>
+        <tr>
+            <td style="text-align:center; opacity:0.5">5</td>
+            <td style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:18px">🔵</span> <b>HTX P2P</b>
+            </td>
+            
+            <td style="text-align:right"><span style="opacity:0.3">-</span></td>
+            <td style="text-align:right"><span style="opacity:0.3">-</span></td>
+            <td style="text-align:right; font-weight:bold"><span style="opacity:0.3">-</span></td>
+            
+            <td style="text-align:right"><span style="opacity:0.3">-</span></td>
+            <td style="text-align:right"><span style="opacity:0.3">-</span></td>
+            <td style="text-align:right; font-weight:bold"><span style="opacity:0.3">-</span></td>
+        </tr>
         
-        <div class="feed-item">
-            <div style="background:var(--green)22; color:var(--green); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↗</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>165m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--green)">BUY</span> 
-                    $45,440
-                </div>
-                <div style="font-size:12px">@ 173.78 ETB</div>
-            </div>
-        </div>
+        <tr>
+            <td style="text-align:center; opacity:0.5">6</td>
+            <td style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:18px">🔵</span> <b>Bitget P2P</b>
+            </td>
+            
+            <td style="text-align:right"><span style="opacity:0.3">-</span></td>
+            <td style="text-align:right"><span style="opacity:0.3">-</span></td>
+            <td style="text-align:right; font-weight:bold"><span style="opacity:0.3">-</span></td>
+            
+            <td style="text-align:right"><span style="opacity:0.3">-</span></td>
+            <td style="text-align:right"><span style="opacity:0.3">-</span></td>
+            <td style="text-align:right; font-weight:bold"><span style="opacity:0.3">-</span></td>
+        </tr>
         
-        <div class="feed-item">
-            <div style="background:var(--red)22; color:var(--red); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↘</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>165m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--red)">SELL</span> 
-                    $20
-                </div>
-                <div style="font-size:12px">@ 174.58 ETB</div>
-            </div>
-        </div>
+        <tr>
+            <td style="text-align:center; opacity:0.5">7</td>
+            <td style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:18px">🟢</span> <b>Kucoin P2P</b>
+            </td>
+            
+            <td style="text-align:right"><span style="opacity:0.3">-</span></td>
+            <td style="text-align:right"><span style="opacity:0.3">-</span></td>
+            <td style="text-align:right; font-weight:bold"><span style="opacity:0.3">-</span></td>
+            
+            <td style="text-align:right"><span style="opacity:0.3">-</span></td>
+            <td style="text-align:right"><span style="opacity:0.3">-</span></td>
+            <td style="text-align:right; font-weight:bold"><span style="opacity:0.3">-</span></td>
+        </tr>
         
-        <div class="feed-item">
-            <div style="background:var(--red)22; color:var(--red); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↘</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>165m ago</span>
+                    
+    <tr style="background-color: #3b305e; font-weight:bold; border-top: 2px solid #5a4b8a;">
+        <td></td>
+        <td style="text-align:right">Total:</td>
+        <td style="text-align:right">66</td>
+        <td style="text-align:right">255</td>
+        <td style="text-align:right">321</td>
+        <td style="text-align:right">$0</td>
+        <td style="text-align:right">$0</td>
+        <td style="text-align:right">$0</td>
+    </tr>
+    
+                </tbody>
+            </table>
+
+            <div class="stats-card">
+                <div class="stat-item">
+                    <div class="stat-val">321</div>
+                    <div class="stat-lbl">Total Active Ads</div>
                 </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--red)">SELL</span> 
-                    $3,925
+                <div class="stat-item">
+                    <div class="stat-val" style="color:#4caf50">$0</div>
+                    <div class="stat-lbl">Total Liquidity (USDT)</div>
                 </div>
-                <div style="font-size:12px">@ 174.68 ETB</div>
+                <div class="stat-item">
+                    <div class="stat-val">153.41</div>
+                    <div class="stat-lbl">Official Rate</div>
+                </div>
             </div>
-        </div>
-        
-        <div class="feed-item">
-            <div style="background:var(--red)22; color:var(--red); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↘</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>165m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--red)">SELL</span> 
-                    $720
-                </div>
-                <div style="font-size:12px">@ 174.68 ETB</div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div style="background:var(--red)22; color:var(--red); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↘</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>165m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--red)">SELL</span> 
-                    $1,027
-                </div>
-                <div style="font-size:12px">@ 174.68 ETB</div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div style="background:var(--green)22; color:var(--green); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↗</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>165m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--green)">BUY</span> 
-                    $7
-                </div>
-                <div style="font-size:12px">@ 174.68 ETB</div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div style="background:var(--green)22; color:var(--green); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↗</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>165m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--green)">BUY</span> 
-                    $26
-                </div>
-                <div style="font-size:12px">@ 174.68 ETB</div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div style="background:var(--green)22; color:var(--green); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↗</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>165m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--green)">BUY</span> 
-                    $150
-                </div>
-                <div style="font-size:12px">@ 174.68 ETB</div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div style="background:var(--red)22; color:var(--red); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↘</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>165m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--red)">SELL</span> 
-                    $81
-                </div>
-                <div style="font-size:12px">@ 175.02 ETB</div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div style="background:var(--green)22; color:var(--green); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↗</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>173m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--green)">BUY</span> 
-                    $10
-                </div>
-                <div style="font-size:12px">@ 173.71 ETB</div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div style="background:var(--red)22; color:var(--red); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↘</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>173m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--red)">SELL</span> 
-                    $293
-                </div>
-                <div style="font-size:12px">@ 173.76 ETB</div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div style="background:var(--red)22; color:var(--red); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↘</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>173m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--red)">SELL</span> 
-                    $70
-                </div>
-                <div style="font-size:12px">@ 173.76 ETB</div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div style="background:var(--red)22; color:var(--red); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↘</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>173m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--red)">SELL</span> 
-                    $3,000
-                </div>
-                <div style="font-size:12px">@ 173.76 ETB</div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div style="background:var(--green)22; color:var(--green); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↗</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>173m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--green)">BUY</span> 
-                    $146
-                </div>
-                <div style="font-size:12px">@ 173.76 ETB</div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div style="background:var(--green)22; color:var(--green); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↗</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>173m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--green)">BUY</span> 
-                    $500,000
-                </div>
-                <div style="font-size:12px">@ 173.76 ETB</div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div style="background:var(--red)22; color:var(--red); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↘</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>173m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--red)">SELL</span> 
-                    $2,355
-                </div>
-                <div style="font-size:12px">@ 173.76 ETB</div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div style="background:var(--green)22; color:var(--green); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↗</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>173m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--green)">BUY</span> 
-                    $45,440
-                </div>
-                <div style="font-size:12px">@ 173.76 ETB</div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div style="background:var(--red)22; color:var(--red); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↘</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>173m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--red)">SELL</span> 
-                    $3,925
-                </div>
-                <div style="font-size:12px">@ 174.66 ETB</div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div style="background:var(--red)22; color:var(--red); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↘</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>173m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--red)">SELL</span> 
-                    $720
-                </div>
-                <div style="font-size:12px">@ 174.66 ETB</div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div style="background:var(--red)22; color:var(--red); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↘</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>173m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--red)">SELL</span> 
-                    $1,027
-                </div>
-                <div style="font-size:12px">@ 174.66 ETB</div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div style="background:var(--red)22; color:var(--red); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↘</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>173m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--red)">SELL</span> 
-                    $16
-                </div>
-                <div style="font-size:12px">@ 174.66 ETB</div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div style="background:var(--green)22; color:var(--green); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↗</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>173m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--green)">BUY</span> 
-                    $7
-                </div>
-                <div style="font-size:12px">@ 174.66 ETB</div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div style="background:var(--red)22; color:var(--red); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↘</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>173m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--red)">SELL</span> 
-                    $80
-                </div>
-                <div style="font-size:12px">@ 174.82 ETB</div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div style="background:var(--red)22; color:var(--red); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↘</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>173m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--red)">SELL</span> 
-                    $64
-                </div>
-                <div style="font-size:12px">@ 175.00 ETB</div>
-            </div>
-        </div>
-        
-        <div class="feed-item">
-            <div style="background:var(--green)22; color:var(--green); width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;">↗</div>
-            <div style="flex:1">
-                <div style="display:flex; justify-content:space-between; font-size:12px; opacity:0.7">
-                    <span>Binance</span>
-                    <span>178m ago</span>
-                </div>
-                <div style="font-weight:bold">
-                    <span style="color:var(--green)">BUY</span> 
-                    $10
-                </div>
-                <div style="font-size:12px">@ 173.74 ETB</div>
-            </div>
-        </div>
-        
-                    </div>
-                </div>
+            
+            <div style="text-align:center; margin-top:20px; font-size:12px; color:#555;">
+                Data refreshed every 60s. **Buy/Sell columns mapped to Advertiser Side to match P2P Army conventions.
             </div>
         </div>
     </body>
