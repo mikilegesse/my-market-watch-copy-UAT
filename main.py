@@ -1628,7 +1628,7 @@ def generate_feed_html(trades, peg):
 
 # --- MAIN ---
 def main():
-    print("🔍 Running v37.0 (Complete Edition - Binance + MEXC + OKX)...", file=sys.stderr)
+    print("🔍 Running v37.6 (Direct Scrapers - Buy/Sell Detection)...", file=sys.stderr)
     
     # Snapshot 1
     print("   > Snapshot 1/2...", file=sys.stderr)
@@ -1638,28 +1638,20 @@ def main():
     print(f"   > ⏳ Waiting {BURST_WAIT_TIME}s to catch trades...", file=sys.stderr)
     time.sleep(BURST_WAIT_TIME)
     
-    # Snapshot 2
+    # Snapshot 2 (with official rate)
     print("   > Snapshot 2/2...", file=sys.stderr)
-    with ThreadPoolExecutor(max_workers=10) as ex:
-        f_binance = ex.submit(lambda: fetch_p2p_army_exchange("binance"))
-        f_mexc = ex.submit(lambda: fetch_p2p_army_exchange("mexc"))
-        f_okx = ex.submit(lambda: fetch_p2p_army_exchange("okx"))
-        f_off = ex.submit(fetch_official_rate)
-        f_peg = ex.submit(fetch_usdt_peg)
-        
-        bin_ads = f_binance.result() or []
-        mexc_ads = f_mexc.result() or []
-        okx_ads = f_okx.result() or []
-        official = f_off.result() or 0.0
-        peg = f_peg.result() or 1.0
+    snapshot_2 = capture_market_snapshot()
     
-    # Filter outliers
-    bin_ads = remove_outliers(bin_ads, peg)
-    mexc_ads = remove_outliers(mexc_ads, peg)
-    okx_ads = remove_outliers(okx_ads, peg)
+    # Get official rate
+    official = fetch_official_rate() or 0.0
+    peg = fetch_usdt_peg() or 1.0
     
-    snapshot_2 = bin_ads + mexc_ads + okx_ads
-    grouped_ads = {"BINANCE": bin_ads, "MEXC": mexc_ads, "OKX": okx_ads}
+    # Group by source for display
+    grouped_ads = {
+        "BINANCE": [x for x in snapshot_2 if x['source'] == 'BINANCE'],
+        "MEXC": [x for x in snapshot_2 if x['source'] == 'MEXC'],
+        "OKX": [x for x in snapshot_2 if x['source'] == 'OKX']
+    }
     
     if snapshot_2:
         # Detect trades
