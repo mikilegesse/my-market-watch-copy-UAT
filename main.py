@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v37.7 (Volume Chart Fixed)
-- FIX: Volume chart now shows all exchanges (even with 0 data)
-- FIX: Added "No data yet" placeholder when starting
-- FIX: Better debug logging for volume calculation
-- FIX: Color-coded volume labels (green=buy, red=sell)
-- NOTE: 45s wait time is OPTIMAL (don't change to 10min!)
+🇪🇹 ETB Financial Terminal v37.4 (Color & Label Fixed)
+- FIX: Chart shows only LATEST label in bright cyan (not cluttered!)
+- FIX: Binance yellow 🟡, MEXC blue 🔵, OKX purple 🟣 (visible on dark!)
+- FIX: Source colors in ticker, feed, and tables all consistent
+- NEW: Statistics panel (Today/MTD/YTD/Overall totals)
 - EXCHANGES: Binance, MEXC, OKX (all via p2p.army API)
 - TICKER: NYSE-style sliding rate ticker at top
-- CHARTS: Clean with latest label + volume bars
-- TRACKING: 1H/Today/Week/24h statistics
+- CHARTS: Interactive tooltips + latest value label
+- TRACKING: Buy + Sell with proper feed display
 - UI: Enhanced Robinhood-style interface
 """
 
@@ -43,27 +42,6 @@ GRAPH_FILENAME = "etb_neon_terminal.png"
 GRAPH_LIGHT_FILENAME = "etb_light_terminal.png"
 HTML_FILENAME = "index.html"
 
-# TIMING CONFIGURATION
-# BURST_WAIT_TIME determines how long we wait between API checks to detect trades
-# Strategy: SHORT wait (45s) catches MORE trades, not fewer!
-# 
-# How it works:
-# 1. Fetch ads at T=0
-# 2. Wait 45 seconds
-# 3. Fetch ads again at T=45s
-# 4. Compare: Ads that disappeared = SOLD, Ads that appeared = BOUGHT
-#
-# Why 45 seconds is optimal:
-# - Too short (10s): Ads might not have time to appear/disappear
-# - Too long (10min): Miss fast trades, fewer checks per GitHub Actions run
-# - 45s: Sweet spot - proven by v29.1 testing
-#
-# With GitHub Actions running every ~3 minutes:
-# - Each run does 1-2 checks
-# - 45s wait allows enough time for ad state changes
-# - Catches both quick and slow trades
-#
-# DO NOT increase to 10 minutes - this will REDUCE trade detection!
 BURST_WAIT_TIME = 45
 TRADE_RETENTION_MINUTES = 1440  # 24 hours
 MAX_ADS_PER_SOURCE = 200
@@ -452,19 +430,19 @@ def generate_charts(stats, official_rate):
 
 # --- STATISTICS CALCULATOR ---
 def calculate_trade_stats(trades):
-    """Calculate 1H/Today/Week/Overall trade statistics"""
+    """Calculate Today/MTD/YTD/Overall trade statistics"""
     import datetime
     
     now = datetime.datetime.now()
-    hour_ago = (now - datetime.timedelta(hours=1)).timestamp()
     today_start = datetime.datetime(now.year, now.month, now.day).timestamp()
-    week_ago = (now - datetime.timedelta(days=7)).timestamp()
+    month_start = datetime.datetime(now.year, now.month, 1).timestamp()
+    year_start = datetime.datetime(now.year, 1, 1).timestamp()
     
     stats = {
-        'hour_buys': 0, 'hour_sells': 0, 'hour_buy_volume': 0, 'hour_sell_volume': 0,
-        'today_buys': 0, 'today_sells': 0, 'today_buy_volume': 0, 'today_sell_volume': 0,
-        'week_buys': 0, 'week_sells': 0, 'week_buy_volume': 0, 'week_sell_volume': 0,
-        'overall_buys': 0, 'overall_sells': 0, 'overall_buy_volume': 0, 'overall_sell_volume': 0
+        'today_buys': 0, 'today_sells': 0, 'today_volume': 0,
+        'mtd_buys': 0, 'mtd_sells': 0, 'mtd_volume': 0,
+        'ytd_buys': 0, 'ytd_sells': 0, 'ytd_volume': 0,
+        'overall_buys': 0, 'overall_sells': 0, 'overall_volume': 0
     }
     
     for trade in trades:
@@ -475,60 +453,35 @@ def calculate_trade_stats(trades):
         # Overall (all trades in 24h history)
         if trade_type == 'buy':
             stats['overall_buys'] += 1
-            stats['overall_buy_volume'] += vol
         elif trade_type == 'sell':
             stats['overall_sells'] += 1
-            stats['overall_sell_volume'] += vol
+        stats['overall_volume'] += vol
         
-        # Last 7 days
-        if ts >= week_ago:
+        # YTD
+        if ts >= year_start:
             if trade_type == 'buy':
-                stats['week_buys'] += 1
-                stats['week_buy_volume'] += vol
+                stats['ytd_buys'] += 1
             elif trade_type == 'sell':
-                stats['week_sells'] += 1
-                stats['week_sell_volume'] += vol
+                stats['ytd_sells'] += 1
+            stats['ytd_volume'] += vol
         
-        # Today (since midnight)
+        # MTD
+        if ts >= month_start:
+            if trade_type == 'buy':
+                stats['mtd_buys'] += 1
+            elif trade_type == 'sell':
+                stats['mtd_sells'] += 1
+            stats['mtd_volume'] += vol
+        
+        # Today
         if ts >= today_start:
             if trade_type == 'buy':
                 stats['today_buys'] += 1
-                stats['today_buy_volume'] += vol
             elif trade_type == 'sell':
                 stats['today_sells'] += 1
-                stats['today_sell_volume'] += vol
-        
-        # Last hour
-        if ts >= hour_ago:
-            if trade_type == 'buy':
-                stats['hour_buys'] += 1
-                stats['hour_buy_volume'] += vol
-            elif trade_type == 'sell':
-                stats['hour_sells'] += 1
-                stats['hour_sell_volume'] += vol
+            stats['today_volume'] += vol
     
     return stats
-
-def calculate_volume_by_exchange(trades):
-    """Calculate buy/sell volume by exchange for last 24h"""
-    volumes = {}
-    
-    for trade in trades:
-        source = trade.get('source', 'Unknown')
-        vol = trade.get('vol_usd', 0)
-        trade_type = trade.get('type', '')
-        
-        if source not in volumes:
-            volumes[source] = {'buy': 0, 'sell': 0, 'total': 0}
-        
-        if trade_type == 'buy':
-            volumes[source]['buy'] += vol
-        elif trade_type == 'sell':
-            volumes[source]['sell'] += vol
-        
-        volumes[source]['total'] += vol
-    
-    return volumes
 
 # --- HTML GENERATOR ---
 def update_website_html(stats, official, timestamp, current_ads, grouped_ads, peg):
@@ -599,79 +552,18 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
     
     # Calculate trade statistics
     trade_stats = calculate_trade_stats(recent_trades)
-    hour_buys = trade_stats['hour_buys']
-    hour_sells = trade_stats['hour_sells']
-    hour_buy_volume = trade_stats['hour_buy_volume']
-    hour_sell_volume = trade_stats['hour_sell_volume']
     today_buys = trade_stats['today_buys']
     today_sells = trade_stats['today_sells']
-    today_buy_volume = trade_stats['today_buy_volume']
-    today_sell_volume = trade_stats['today_sell_volume']
-    week_buys = trade_stats['week_buys']
-    week_sells = trade_stats['week_sells']
-    week_buy_volume = trade_stats['week_buy_volume']
-    week_sell_volume = trade_stats['week_sell_volume']
+    today_volume = trade_stats['today_volume']
+    mtd_buys = trade_stats['mtd_buys']
+    mtd_sells = trade_stats['mtd_sells']
+    mtd_volume = trade_stats['mtd_volume']
+    ytd_buys = trade_stats['ytd_buys']
+    ytd_sells = trade_stats['ytd_sells']
+    ytd_volume = trade_stats['ytd_volume']
     overall_buys = trade_stats['overall_buys']
     overall_sells = trade_stats['overall_sells']
-    overall_buy_volume = trade_stats['overall_buy_volume']
-    overall_sell_volume = trade_stats['overall_sell_volume']
-    
-    # Calculate volume by exchange
-    volume_by_exchange = calculate_volume_by_exchange(recent_trades)
-    
-    # Debug logging
-    print(f"\n📊 Volume by Exchange:")
-    for source, data in volume_by_exchange.items():
-        print(f"  {source}: Buy ${data['buy']:,.0f}, Sell ${data['sell']:,.0f}, Total ${data['total']:,.0f}")
-    
-    # Create volume chart HTML - ALWAYS show all exchanges
-    volume_chart_html = ""
-    if not volume_by_exchange or all(v['total'] == 0 for v in volume_by_exchange.values()):
-        # No data yet - show placeholder
-        volume_chart_html = """
-        <div style="text-align:center;padding:40px;color:var(--text-secondary)">
-            <div style="font-size:48px;margin-bottom:16px">📊</div>
-            <div style="font-size:16px;font-weight:600;margin-bottom:8px">No Volume Data Yet</div>
-            <div style="font-size:14px">Waiting for trade detection...</div>
-        </div>
-        """
-    else:
-        max_volume = max([v['total'] for v in volume_by_exchange.values()])
-        
-        for source in ['BINANCE', 'MEXC', 'OKX']:
-            # Get data or default to 0
-            data = volume_by_exchange.get(source, {'buy': 0, 'sell': 0, 'total': 0})
-            buy_pct = (data['buy'] / max_volume * 100) if max_volume > 0 else 0
-            sell_pct = (data['sell'] / max_volume * 100) if max_volume > 0 else 0
-            
-            # Ensure minimum visible width if there's any volume
-            if data['buy'] > 0 and buy_pct < 2:
-                buy_pct = 2
-            if data['sell'] > 0 and sell_pct < 2:
-                sell_pct = 2
-            
-            # Source emoji and color
-            emoji = '🟡' if source == 'BINANCE' else ('🔵' if source == 'MEXC' else '🟣')
-            color = '#F3BA2F' if source == 'BINANCE' else ('#2E55E6' if source == 'MEXC' else '#A855F7')
-            
-            volume_chart_html += f"""
-            <div class="volume-row">
-                <div class="volume-source">
-                    <span style="font-size:20px">{emoji}</span>
-                    <span style="color:{color};font-weight:600">{source}</span>
-                </div>
-                <div class="volume-bars">
-                    <div class="volume-bar-group">
-                        <div class="volume-bar buy-bar" style="width:{buy_pct}%"></div>
-                        <span class="volume-label buy-label">${data['buy']:,.0f}</span>
-                    </div>
-                    <div class="volume-bar-group">
-                        <div class="volume-bar sell-bar" style="width:{sell_pct}%"></div>
-                        <span class="volume-label sell-label">${data['sell']:,.0f}</span>
-                    </div>
-                </div>
-            </div>
-            """
+    overall_volume = trade_stats['overall_volume']
     
     # Generate ticker HTML
     ticker_html = ""
@@ -992,11 +884,10 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             
             .source-col {{
                 font-weight: 600;
-                color: #00ff9d;  /* Green like terminal */
             }}
             
             .med-col {{
-                color: #ff0066;  /* Pink/Magenta for median */
+                color: var(--accent);
                 font-weight: 700;
             }}
             
@@ -1117,31 +1008,14 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                 font-size: 18px;
                 font-weight: 700;
                 color: var(--text);
-                margin-bottom: 20px;
+                margin-bottom: 16px;
                 text-align: center;
-            }}
-            
-            .stats-section {{
-                margin-bottom: 24px;
-            }}
-            
-            .stats-section:last-child {{
-                margin-bottom: 0;
-            }}
-            
-            .stats-section-title {{
-                font-size: 16px;
-                font-weight: 600;
-                color: var(--text);
-                margin-bottom: 12px;
-                padding-bottom: 8px;
-                border-bottom: 1px solid var(--border);
             }}
             
             .stats-grid {{
                 display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-                gap: 12px;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 16px;
             }}
             
             .stat-card {{
@@ -1153,26 +1027,10 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                 transition: all 0.2s ease;
             }}
             
-            .buy-card {{
-                background: rgba(0, 200, 5, 0.08);
-                border-color: rgba(0, 200, 5, 0.3);
-            }}
-            
-            .buy-card:hover {{
+            .stat-card:hover {{
                 transform: translateY(-2px);
-                border-color: #00C805;
-                box-shadow: 0 4px 12px rgba(0, 200, 5, 0.2);
-            }}
-            
-            .sell-card {{
-                background: rgba(255, 59, 48, 0.08);
-                border-color: rgba(255, 59, 48, 0.3);
-            }}
-            
-            .sell-card:hover {{
-                transform: translateY(-2px);
-                border-color: #FF3B30;
-                box-shadow: 0 4px 12px rgba(255, 59, 48, 0.2);
+                border-color: var(--accent);
+                box-shadow: 0 4px 12px rgba(10, 132, 255, 0.1);
             }}
             
             .stat-label {{
@@ -1185,115 +1043,16 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             }}
             
             .stat-value {{
-                font-size: 32px;
+                font-size: 20px;
                 font-weight: 700;
+                color: var(--text);
                 margin-bottom: 6px;
             }}
             
-            .stat-value.green {{
-                color: #00C805;
-            }}
-            
-            .stat-value.red {{
-                color: #FF3B30;
-            }}
-            
             .stat-volume {{
-                font-size: 13px;
+                font-size: 14px;
                 color: #00bfff;
                 font-weight: 600;
-            }}
-            
-            .volume-chart-panel {{
-                background: var(--card);
-                border-radius: 12px;
-                padding: 20px;
-                margin: 20px;
-                border: 1px solid var(--border);
-            }}
-            
-            .volume-chart-title {{
-                font-size: 18px;
-                font-weight: 700;
-                color: var(--text);
-                margin-bottom: 20px;
-                text-align: center;
-            }}
-            
-            .volume-legend {{
-                display: flex;
-                justify-content: center;
-                gap: 24px;
-                margin-bottom: 20px;
-                font-size: 13px;
-            }}
-            
-            .volume-legend-item {{
-                display: flex;
-                align-items: center;
-                gap: 8px;
-            }}
-            
-            .volume-legend-box {{
-                width: 16px;
-                height: 16px;
-                border-radius: 4px;
-            }}
-            
-            .volume-row {{
-                display: grid;
-                grid-template-columns: 150px 1fr;
-                gap: 20px;
-                margin-bottom: 16px;
-                align-items: center;
-            }}
-            
-            .volume-source {{
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                font-size: 14px;
-            }}
-            
-            .volume-bars {{
-                display: flex;
-                flex-direction: column;
-                gap: 8px;
-            }}
-            
-            .volume-bar-group {{
-                display: flex;
-                align-items: center;
-                gap: 12px;
-            }}
-            
-            .volume-bar {{
-                height: 24px;
-                border-radius: 4px;
-                transition: width 0.3s ease;
-                min-width: 2px;
-            }}
-            
-            .buy-bar {{
-                background: linear-gradient(90deg, #00C805 0%, #00ff9d 100%);
-            }}
-            
-            .sell-bar {{
-                background: linear-gradient(90deg, #FF3B30 0%, #ff6b6b 100%);
-            }}
-            
-            .volume-label {{
-                font-size: 13px;
-                font-weight: 600;
-                min-width: 100px;
-            }}
-            
-            .buy-label {{
-                color: #00C805;
-            }}
-            
-            .sell-label {{
-                color: #FF3B30;
             }}
             
             footer {{
@@ -1440,85 +1199,36 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                 </div>
             </div>
             
-            
-            <!-- Volume Comparison Chart -->
-            <div class="volume-chart-panel">
-                <div class="volume-chart-title">24h Volume by Exchange (Buy vs Sell)</div>
-                <div class="volume-legend">
-                    <div class="volume-legend-item">
-                        <div class="volume-legend-box buy-bar"></div>
-                        <span>Buy Volume</span>
-                    </div>
-                    <div class="volume-legend-item">
-                        <div class="volume-legend-box sell-bar"></div>
-                        <span>Sell Volume</span>
-                    </div>
-                </div>
-                {volume_chart_html}
-            </div>
-            
             <!-- Transaction Statistics Panel -->
             <div class="stats-panel">
-                <div class="stats-title">Transaction Statistics (Within 24 hrs)</div>
-                
-                <!-- Buy Transactions -->
-                <div class="stats-section">
-                    <div class="stats-section-title">🟢 Buy Transactions</div>
-                    <div class="stats-grid">
-                        <div class="stat-card buy-card">
-                            <div class="stat-label">Last 1 Hour</div>
-                            <div class="stat-value green">{hour_buys}</div>
-                            <div class="stat-volume">{hour_buy_volume:,.0f} USDT</div>
-                        </div>
-                        <div class="stat-card buy-card">
-                            <div class="stat-label">Today</div>
-                            <div class="stat-value green">{today_buys}</div>
-                            <div class="stat-volume">{today_buy_volume:,.0f} USDT</div>
-                        </div>
-                        <div class="stat-card buy-card">
-                            <div class="stat-label">This Week</div>
-                            <div class="stat-value green">{week_buys}</div>
-                            <div class="stat-volume">{week_buy_volume:,.0f} USDT</div>
-                        </div>
-                        <div class="stat-card buy-card">
-                            <div class="stat-label">Overall (24h)</div>
-                            <div class="stat-value green">{overall_buys}</div>
-                            <div class="stat-volume">{overall_buy_volume:,.0f} USDT</div>
-                        </div>
+                <div class="stats-title">Transaction Statistics</div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Today</div>
+                        <div class="stat-value">{today_buys} 🟢 | {today_sells} 🔴</div>
+                        <div class="stat-volume">{today_volume:,.0f} USDT</div>
                     </div>
-                </div>
-                
-                <!-- Sell Transactions -->
-                <div class="stats-section">
-                    <div class="stats-section-title">🔴 Sell Transactions</div>
-                    <div class="stats-grid">
-                        <div class="stat-card sell-card">
-                            <div class="stat-label">Last 1 Hour</div>
-                            <div class="stat-value red">{hour_sells}</div>
-                            <div class="stat-volume">{hour_sell_volume:,.0f} USDT</div>
-                        </div>
-                        <div class="stat-card sell-card">
-                            <div class="stat-label">Today</div>
-                            <div class="stat-value red">{today_sells}</div>
-                            <div class="stat-volume">{today_sell_volume:,.0f} USDT</div>
-                        </div>
-                        <div class="stat-card sell-card">
-                            <div class="stat-label">This Week</div>
-                            <div class="stat-value red">{week_sells}</div>
-                            <div class="stat-volume">{week_sell_volume:,.0f} USDT</div>
-                        </div>
-                        <div class="stat-card sell-card">
-                            <div class="stat-label">Overall (24h)</div>
-                            <div class="stat-value red">{overall_sells}</div>
-                            <div class="stat-volume">{overall_sell_volume:,.0f} USDT</div>
-                        </div>
+                    <div class="stat-card">
+                        <div class="stat-label">MTD (This Month)</div>
+                        <div class="stat-value">{mtd_buys} 🟢 | {mtd_sells} 🔴</div>
+                        <div class="stat-volume">{mtd_volume:,.0f} USDT</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">YTD (This Year)</div>
+                        <div class="stat-value">{ytd_buys} 🟢 | {ytd_sells} 🔴</div>
+                        <div class="stat-volume">{ytd_volume:,.0f} USDT</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Overall (24h)</div>
+                        <div class="stat-value">{overall_buys} 🟢 | {overall_sells} 🔴</div>
+                        <div class="stat-volume">{overall_volume:,.0f} USDT</div>
                     </div>
                 </div>
             </div>
             
             <footer>
                 Official Rate: {official:.2f} ETB | Last Update: {timestamp} UTC<br>
-                v37.7 Volume Chart Fixed • 🟡 Binance 🔵 MEXC 🟣 OKX • 45s optimal timing
+                v37.4 Color & Label Fixed • 🟡 Binance 🔵 MEXC 🟣 OKX • 45s tracking, 24h history
             </footer>
         </div>
         
