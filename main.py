@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v35.1 (MEXC Fix)
+🇪🇹 ETB Financial Terminal v35.2 (Enhanced Filtering + Distribution)
 - DETECTION: v29.1's proven inventory tracking (available amount drops)
-- MEXC API: v16.0's proven MEXC fetching method
-- STRUCTURE: v34's clean code organization
+- FILTERING: Remove lowest 10% from Binance & MEXC (unreliable offers)
+- DISTRIBUTION: 5 ETB price band analysis table
+- MEXC API: v16.0's proven method
 - DISPLAY: Modern feed with 1-hour history
 """
 
@@ -178,13 +179,22 @@ def capture_market_snapshot():
         f_bin = ex.submit(lambda: fetch_binance_direct("SELL"))
         f_byb = ex.submit(lambda: fetch_bybit("1"))
         f_mexc = ex.submit(lambda: fetch_mexc_api("SELL"))
+        f_peg = ex.submit(fetch_usdt_peg)
         
         bin_data = f_bin.result() or []
         mexc_data = f_mexc.result() or []
         bybit_data = f_byb.result() or []
+        peg = f_peg.result() or 1.0
         
-        total = len(bin_data) + len(mexc_data) + len(bybit_data)
-        print(f"   📊 Collected {total} ads (Binance: {len(bin_data)}, MEXC: {len(mexc_data)}, Bybit: {len(bybit_data)})", file=sys.stderr)
+        total_before = len(bin_data) + len(mexc_data) + len(bybit_data)
+        print(f"   📊 Collected {total_before} ads (Binance: {len(bin_data)}, MEXC: {len(mexc_data)}, Bybit: {len(bybit_data)})", file=sys.stderr)
+        
+        # Remove lowest 10% from Binance and MEXC (unreliable cheap offers)
+        bin_data = remove_outliers(bin_data, peg)
+        mexc_data = remove_outliers(mexc_data, peg)
+        
+        total_after = len(bin_data) + len(mexc_data) + len(bybit_data)
+        print(f"   ✂️ After filtering: {total_after} ads (removed {total_before - total_after} outliers)", file=sys.stderr)
         
         return bin_data + bybit_data + mexc_data
 
@@ -331,6 +341,39 @@ def analyze(prices, peg):
         "raw_data": adj, "count": n
     }
 
+def calculate_price_distribution(ads, peg, bin_size=5):
+    """Calculate how many ads fall within each 5 ETB price band"""
+    if not ads:
+        return []
+    
+    # Get all prices in ETB
+    prices = []
+    for ad in ads:
+        if isinstance(ad, dict) and 'price' in ad:
+            prices.append(ad['price'] / peg)
+    
+    if not prices:
+        return []
+    
+    # Find min and max to determine range
+    min_price = min(prices)
+    max_price = max(prices)
+    
+    # Create bins (5 ETB bands)
+    bins = {}
+    for price in prices:
+        # Round down to nearest 5 ETB
+        bin_start = int(price / bin_size) * bin_size
+        bin_key = f"{bin_start}-{bin_start + bin_size}"
+        
+        if bin_key not in bins:
+            bins[bin_key] = 0
+        bins[bin_key] += 1
+    
+    # Sort by price range and return
+    sorted_bins = sorted(bins.items(), key=lambda x: float(x[0].split('-')[0]))
+    return sorted_bins
+
 # --- 4. HISTORY ---
 def save_to_history(stats, official):
     file_exists = os.path.isfile(HISTORY_FILE)
@@ -442,7 +485,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
     prem = ((stats["median"] - official) / official) * 100 if official else 0
     cache_buster = int(time.time())
     
-    # Table
+    # Table 1: Source Summary
     table_rows = ""
     for source, ads in grouped_ads.items():
         prices = [a["price"] for a in ads]
@@ -451,6 +494,18 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             table_rows += f"<tr><td class='source-col'>{source}</td><td>{s['min']:.2f}</td><td>{s['q1']:.2f}</td><td class='med-col'>{s['median']:.2f}</td><td>{s['q3']:.2f}</td><td>{s['max']:.2f}</td><td>{s['count']}</td></tr>"
         else:
             table_rows += f"<tr><td>{source}</td><td colspan='6' style='opacity:0.5'>No Data</td></tr>"
+    
+    # Table 2: Price Distribution (5 ETB bands)
+    distribution = calculate_price_distribution(current_ads, peg, bin_size=5)
+    dist_rows = ""
+    if distribution:
+        for price_range, count in distribution:
+            # Highlight the band with most ads
+            max_count = max([c for _, c in distribution])
+            style = "font-weight:bold;color:var(--accent)" if count == max_count else ""
+            dist_rows += f"<tr><td style='{style}'>{price_range} ETB</td><td style='{style}'>{count}</td></tr>"
+    else:
+        dist_rows = "<tr><td colspan='2' style='opacity:0.5'>No Data</td></tr>"
     
     # Feed
     feed_html = ""
@@ -523,7 +578,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
         <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="refresh" content="300">
-        <title>ETB Market Watch v35.1</title>
+        <title>ETB Market Watch v35.2</title>
         <style>
             :root {{ --bg: #050505; --card: #111; --text: #00ff9d; --sub: #ccc; --mute: #666; --accent: #ff0055; --link: #00bfff; --gold: #ffcc00; --border: #333; }}
             [data-theme="light"] {{ --bg: #f4f4f9; --card: #fff; --text: #1a1a1a; --sub: #333; --mute: #888; --accent: #d63384; --link: #0d6efd; --gold: #ffc107; --border: #ddd; }}
@@ -566,7 +621,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
         <div class="container">
             <header>
                 <h1>ETB MARKET INTELLIGENCE</h1>
-                <div style="color:var(--mute); letter-spacing:4px; font-size:0.8rem;">/// INVENTORY TRACKING (v29.1 + MEXC v16.0 Fix) ///</div>
+                <div style="color:var(--mute); letter-spacing:4px; font-size:0.8rem;">/// INVENTORY TRACKING + SMART FILTERING + DISTRIBUTION ///</div>
                 <div class="toggle" onclick="toggleTheme()">🌓 Theme</div>
             </header>
 
@@ -580,9 +635,17 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                     <img src="{GRAPH_FILENAME}?v={cache_buster}" id="chartImg" alt="Market Chart">
                 </div>
                 <div class="card">
+                    <h3 style="margin:0 0 15px 0; color:var(--text); font-size:1rem;">Market Summary by Source</h3>
                     <table>
                         <thead><tr><th>Source</th><th>Min</th><th>Q1</th><th>Med</th><th>Q3</th><th>Max</th><th>Ads</th></tr></thead>
                         <tbody>{table_rows}</tbody>
+                    </table>
+                </div>
+                <div class="card">
+                    <h3 style="margin:0 0 15px 0; color:var(--text); font-size:1rem;">📊 Price Distribution (5 ETB Bands)</h3>
+                    <table>
+                        <thead><tr><th>Price Range</th><th>Ad Count</th></tr></thead>
+                        <tbody>{dist_rows}</tbody>
                     </table>
                 </div>
             </div>
@@ -628,7 +691,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
 
 # --- 7. MAIN (v29.1 BURST SCAN) ---
 def main():
-    print("🔍 Running v35.1 (MEXC v16.0 Fix)...", file=sys.stderr)
+    print("🔍 Running v35.2 (Smart Filtering + Distribution)...", file=sys.stderr)
     
     # 1. SNAPSHOT 1
     print("   > Snapshot 1/2...", file=sys.stderr)
