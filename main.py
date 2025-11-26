@@ -1929,9 +1929,9 @@ def main():
     # Snapshot 2
     print("   > Snapshot 2/2...", file=sys.stderr)
     with ThreadPoolExecutor(max_workers=10) as ex:
-        f_binance = ex.submit(lambda: fetch_p2p_army_exchange("binance"))
-        f_mexc = ex.submit(lambda: fetch_p2p_army_exchange("mexc"))
-        f_okx = ex.submit(lambda: fetch_p2p_army_exchange("okx"))
+        f_binance = ex.submit(fetch_binance_both_sides)  # ← FIXED: Fetch buy + sell!
+        f_mexc = ex.submit(lambda: fetch_p2p_army_exchange("mexc", "SELL"))
+        f_okx = ex.submit(lambda: fetch_p2p_army_exchange("okx", "SELL"))
         f_off = ex.submit(fetch_official_rate)
         f_peg = ex.submit(fetch_usdt_peg)
         
