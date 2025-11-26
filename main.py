@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v37.4 (Color & Label Fixed)
-- FIX: Chart shows only LATEST label in bright cyan (not cluttered!)
-- FIX: Binance yellow 🟡, MEXC blue 🔵, OKX purple 🟣 (visible on dark!)
-- FIX: Source colors in ticker, feed, and tables all consistent
-- NEW: Statistics panel (Today/MTD/YTD/Overall totals)
+🇪🇹 ETB Financial Terminal v37.0 (Complete Edition)
 - EXCHANGES: Binance, MEXC, OKX (all via p2p.army API)
 - TICKER: NYSE-style sliding rate ticker at top
-- CHARTS: Interactive tooltips + latest value label
+- CHARTS: Interactive tooltips on hover
 - TRACKING: Buy + Sell with proper feed display
 - UI: Enhanced Robinhood-style interface
 """
@@ -391,33 +387,10 @@ def generate_charts(stats, official_rate):
         # Bottom: Historical Trend
         ax2 = fig.add_subplot(2, 1, 2)
         if len(dates) > 1:
-            # Use yellow for fill area, green for line
-            ax2.fill_between(dates, q1s, q3s, color='#FFD700' if mode == 'dark' else '#FFA500', alpha=0.15, linewidth=0)
-            
-            # Plot black market rate (green line)
-            line1 = ax2.plot(dates, medians, color='#00ff9d' if mode == 'dark' else '#00a876', linewidth=2.5, label='Black Market Rate')[0]
-            
-            # Plot official rate (dotted line)
+            ax2.fill_between(dates, q1s, q3s, color=style["fill"], alpha=0.2, linewidth=0)
+            ax2.plot(dates, medians, color=style["median"], linewidth=2)
             if any(offs):
-                line2 = ax2.plot(dates, offs, color=style["fg"], linestyle="--", linewidth=1.5, alpha=0.7, label='Official Rate')[0]
-            
-            # Add ONLY THE LATEST label in bright color
-            if len(medians) > 0:
-                latest_idx = len(medians) - 1
-                # Latest black market rate in bright cyan
-                ax2.text(dates[latest_idx], medians[latest_idx], f'{medians[latest_idx]:.1f}', 
-                        fontsize=10, ha='left', va='bottom', color='#00ffff',
-                        fontweight='bold', bbox=dict(boxstyle='round,pad=0.3', facecolor='black', alpha=0.7))
-                
-                # Latest official rate in white
-                if latest_idx < len(offs) and offs[latest_idx]:
-                    ax2.text(dates[latest_idx], offs[latest_idx], f'{offs[latest_idx]:.1f}', 
-                            fontsize=9, ha='left', va='top', color='white', 
-                            fontweight='bold', bbox=dict(boxstyle='round,pad=0.3', facecolor='black', alpha=0.7))
-            
-            # Add legend
-            ax2.legend(loc='upper left', framealpha=0.8, facecolor=style["bg"], edgecolor=style["fg"])
-            
+                ax2.plot(dates, offs, color=style["fg"], linestyle="--", linewidth=1, alpha=0.5)
             ax2.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
             ax2.yaxis.set_major_formatter(ticker.FormatStrFormatter("%.1f"))
             ax2.yaxis.tick_right()
@@ -427,61 +400,6 @@ def generate_charts(stats, official_rate):
         plt.tight_layout(rect=[0, 0, 1, 0.95])
         plt.savefig(filename, dpi=150, facecolor=style["bg"])
         plt.close()
-
-# --- STATISTICS CALCULATOR ---
-def calculate_trade_stats(trades):
-    """Calculate Today/MTD/YTD/Overall trade statistics"""
-    import datetime
-    
-    now = datetime.datetime.now()
-    today_start = datetime.datetime(now.year, now.month, now.day).timestamp()
-    month_start = datetime.datetime(now.year, now.month, 1).timestamp()
-    year_start = datetime.datetime(now.year, 1, 1).timestamp()
-    
-    stats = {
-        'today_buys': 0, 'today_sells': 0, 'today_volume': 0,
-        'mtd_buys': 0, 'mtd_sells': 0, 'mtd_volume': 0,
-        'ytd_buys': 0, 'ytd_sells': 0, 'ytd_volume': 0,
-        'overall_buys': 0, 'overall_sells': 0, 'overall_volume': 0
-    }
-    
-    for trade in trades:
-        ts = trade.get('timestamp', 0)
-        vol = trade.get('vol_usd', 0)
-        trade_type = trade.get('type', '')
-        
-        # Overall (all trades in 24h history)
-        if trade_type == 'buy':
-            stats['overall_buys'] += 1
-        elif trade_type == 'sell':
-            stats['overall_sells'] += 1
-        stats['overall_volume'] += vol
-        
-        # YTD
-        if ts >= year_start:
-            if trade_type == 'buy':
-                stats['ytd_buys'] += 1
-            elif trade_type == 'sell':
-                stats['ytd_sells'] += 1
-            stats['ytd_volume'] += vol
-        
-        # MTD
-        if ts >= month_start:
-            if trade_type == 'buy':
-                stats['mtd_buys'] += 1
-            elif trade_type == 'sell':
-                stats['mtd_sells'] += 1
-            stats['mtd_volume'] += vol
-        
-        # Today
-        if ts >= today_start:
-            if trade_type == 'buy':
-                stats['today_buys'] += 1
-            elif trade_type == 'sell':
-                stats['today_sells'] += 1
-            stats['today_volume'] += vol
-    
-    return stats
 
 # --- HTML GENERATOR ---
 def update_website_html(stats, official, timestamp, current_ads, grouped_ads, peg):
@@ -550,41 +468,14 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
     # Generate feed HTML (server-side rendering of initial state)
     feed_html = generate_feed_html(recent_trades, peg)
     
-    # Calculate trade statistics
-    trade_stats = calculate_trade_stats(recent_trades)
-    today_buys = trade_stats['today_buys']
-    today_sells = trade_stats['today_sells']
-    today_volume = trade_stats['today_volume']
-    mtd_buys = trade_stats['mtd_buys']
-    mtd_sells = trade_stats['mtd_sells']
-    mtd_volume = trade_stats['mtd_volume']
-    ytd_buys = trade_stats['ytd_buys']
-    ytd_sells = trade_stats['ytd_sells']
-    ytd_volume = trade_stats['ytd_volume']
-    overall_buys = trade_stats['overall_buys']
-    overall_sells = trade_stats['overall_sells']
-    overall_volume = trade_stats['overall_volume']
-    
     # Generate ticker HTML
     ticker_html = ""
     for item in ticker_items * 3:  # Repeat for continuous scroll
         change_symbol = "▲" if item['change'] > 0 else "▼" if item['change'] < 0 else "━"
         change_color = "#00C805" if item['change'] > 0 else "#FF3B30" if item['change'] < 0 else "#8E8E93"
-        
-        # Add emoji and color for each source
-        source_display = item['source']
-        if item['source'] == 'BINANCE':
-            source_display = f"🟡 {item['source']}"
-        elif item['source'] == 'MEXC':
-            source_display = f"🔵 {item['source']}"
-        elif item['source'] == 'OKX':
-            source_display = f"🟣 {item['source']}"
-        elif item['source'] == 'Official':
-            source_display = f"💵 {item['source']}"
-        
         ticker_html += f"""
         <div class="ticker-item">
-            <span class="ticker-source">{source_display}</span>
+            <span class="ticker-source">{item['source']}</span>
             <span class="ticker-price">{item['median']:.2f} ETB</span>
             <span class="ticker-change" style="color:{change_color}">{change_symbol}</span>
         </div>
@@ -983,75 +874,15 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             
             .feed-user {{
                 font-weight: 600;
-                font-family: 'Courier New', monospace;
-                color: #00ff9d;
+                color: var(--text);
             }}
             
             .feed-amount {{
                 font-weight: 700;
-                color: #00bfff;
+                color: var(--accent);
             }}
             
             .feed-price {{
-                font-weight: 600;
-            }}
-            
-            .stats-panel {{
-                background: var(--card);
-                border-radius: 12px;
-                padding: 20px;
-                margin: 20px;
-                border: 1px solid var(--border);
-            }}
-            
-            .stats-title {{
-                font-size: 18px;
-                font-weight: 700;
-                color: var(--text);
-                margin-bottom: 16px;
-                text-align: center;
-            }}
-            
-            .stats-grid {{
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                gap: 16px;
-            }}
-            
-            .stat-card {{
-                background: rgba(10, 132, 255, 0.05);
-                border: 1px solid var(--border);
-                border-radius: 10px;
-                padding: 16px;
-                text-align: center;
-                transition: all 0.2s ease;
-            }}
-            
-            .stat-card:hover {{
-                transform: translateY(-2px);
-                border-color: var(--accent);
-                box-shadow: 0 4px 12px rgba(10, 132, 255, 0.1);
-            }}
-            
-            .stat-label {{
-                font-size: 12px;
-                color: var(--text-secondary);
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-                margin-bottom: 8px;
-                font-weight: 600;
-            }}
-            
-            .stat-value {{
-                font-size: 20px;
-                font-weight: 700;
-                color: var(--text);
-                margin-bottom: 6px;
-            }}
-            
-            .stat-volume {{
-                font-size: 14px;
-                color: #00bfff;
                 font-weight: 600;
             }}
             
@@ -1189,7 +1020,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                                 🔵 MEXC
                             </button>
                             <button class="source-filter-btn" data-source="OKX" onclick="filterBySource('OKX')" style="background:transparent;color:var(--text-secondary);border:1px solid var(--border);padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
-                                🟣 OKX
+                                ⚫ OKX
                             </button>
                         </div>
                     </div>
@@ -1199,36 +1030,9 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                 </div>
             </div>
             
-            <!-- Transaction Statistics Panel -->
-            <div class="stats-panel">
-                <div class="stats-title">Transaction Statistics</div>
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-label">Today</div>
-                        <div class="stat-value">{today_buys} 🟢 | {today_sells} 🔴</div>
-                        <div class="stat-volume">{today_volume:,.0f} USDT</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">MTD (This Month)</div>
-                        <div class="stat-value">{mtd_buys} 🟢 | {mtd_sells} 🔴</div>
-                        <div class="stat-volume">{mtd_volume:,.0f} USDT</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">YTD (This Year)</div>
-                        <div class="stat-value">{ytd_buys} 🟢 | {ytd_sells} 🔴</div>
-                        <div class="stat-volume">{ytd_volume:,.0f} USDT</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Overall (24h)</div>
-                        <div class="stat-value">{overall_buys} 🟢 | {overall_sells} 🔴</div>
-                        <div class="stat-volume">{overall_volume:,.0f} USDT</div>
-                    </div>
-                </div>
-            </div>
-            
             <footer>
                 Official Rate: {official:.2f} ETB | Last Update: {timestamp} UTC<br>
-                v37.4 Color & Label Fixed • 🟡 Binance 🔵 MEXC 🟣 OKX • 45s tracking, 24h history
+                v37.0 Complete Edition • Binance, MEXC, OKX • 45s tracking, 24h history
             </footer>
         </div>
         
@@ -1306,7 +1110,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                 }});
                 
                 if (currentSource !== 'all') {{
-                    filtered = filtered.filter(t => t.source.toUpperCase() === currentSource.toUpperCase());
+                    filtered = filtered.filter(t => t.source === currentSource);
                 }}
                 
                 renderFeed(filtered);
@@ -1325,10 +1129,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                     return;
                 }}
                 
-                // Sort by timestamp DESC (newest first), then take top 50
-                const sorted = trades.sort((a, b) => b.timestamp - a.timestamp).slice(0, 50);
-                
-                const html = sorted.map(trade => {{
+                const html = trades.slice(0, 50).reverse().map(trade => {{
                     const date = new Date(trade.timestamp * 1000);
                     const time = date.toLocaleTimeString('en-US', {{hour: '2-digit', minute: '2-digit'}});
                     const ageMin = Math.floor((Date.now() / 1000 - trade.timestamp) / 60);
@@ -1341,14 +1142,14 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                     
                     let sourceColor, sourceEmoji;
                     if (trade.source === 'BINANCE') {{
-                        sourceColor = '#F3BA2F';  // Yellow
+                        sourceColor = '#F3BA2F';
                         sourceEmoji = '🟡';
                     }} else if (trade.source === 'MEXC') {{
-                        sourceColor = '#2E55E6';  // Blue
+                        sourceColor = '#2E55E6';
                         sourceEmoji = '🔵';
                     }} else {{
-                        sourceColor = '#A855F7';  // Purple (OKX)
-                        sourceEmoji = '🟣';
+                        sourceColor = '#000000';
+                        sourceEmoji = '⚫';
                     }}
                     
                     return `
@@ -1421,11 +1222,11 @@ def generate_feed_html(trades, peg):
         
         source = trade.get('source', 'Unknown')
         if source == 'BINANCE':
-            emoji, color = '🟡', '#F3BA2F'  # Yellow
+            emoji, color = '🟡', '#F3BA2F'
         elif source == 'MEXC':
-            emoji, color = '🔵', '#2E55E6'  # Blue
+            emoji, color = '🔵', '#2E55E6'
         else:
-            emoji, color = '🟣', '#A855F7'  # Purple (OKX)
+            emoji, color = '⚫', '#000000'
         
         html += f"""
         <div class="feed-item">
