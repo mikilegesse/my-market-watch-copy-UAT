@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v38.2 (Back to p2p.army!)
-- FIX: Use p2p.army API for Binance (direct API returned 0 ads!)
-- KEEP: Fetch BOTH buy AND sell ads (100 total from Binance!)
+🇪🇹 ETB Financial Terminal v38.3 (THE CRITICAL FIX!)
+- CRITICAL: Save snapshot_1 before waiting (was comparing to OLD data!)
+- FIX: Now compares snapshot_2 to snapshot_1 (45s apart) NOT old data!
+- ROOT CAUSE: Never saved baseline, compared to stale market_state.json
+- THIS IS THE FIX: Will finally detect inventory changes!
+- KEEP: Fetch BOTH buy AND sell ads via p2p.army
 - KEEP: 3-way detection (disappeared/new/changed)
-- KEEP: Enhanced detection system
-- ALL: Use p2p.army for all exchanges (MEXC, OKX, Binance)
 - NOTE: 45s wait time still optimal
 - EXCHANGES: Binance, MEXC, OKX (all via p2p.army)
 - TICKER: NYSE-style sliding rate ticker at top
@@ -1685,7 +1686,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             
             <footer>
                 Official Rate: {official:.2f} ETB | Last Update: {timestamp} UTC<br>
-                v38.2 p2p.army • 🟡 Binance (p2p.army buy+sell) 🔵 MEXC 🟣 OKX • All via p2p.army API
+                v38.3 THE FIX! • Saves baseline snapshot • Now detects inventory changes properly! 🎯
             </footer>
         </div>
         
@@ -1911,11 +1912,15 @@ def generate_feed_html(trades, peg):
 
 # --- MAIN ---
 def main():
-    print("🔍 Running v37.0 (Complete Edition - Binance + MEXC + OKX)...", file=sys.stderr)
+    print("🔍 Running v38.3 (THE FIX - Saves baseline snapshot!)...", file=sys.stderr)
     
     # Snapshot 1
     print("   > Snapshot 1/2...", file=sys.stderr)
     snapshot_1 = capture_market_snapshot()
+    
+    # CRITICAL FIX: Save snapshot_1 as baseline for comparison!
+    save_market_state(snapshot_1)
+    print("   > Saved baseline snapshot", file=sys.stderr)
     
     # Wait
     print(f"   > ⏳ Waiting {BURST_WAIT_TIME}s to catch trades...", file=sys.stderr)
