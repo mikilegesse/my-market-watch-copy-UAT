@@ -155,7 +155,7 @@ def fetch_binance_p2p_both_sides():
     return ads
 
 def fetch_p2p_army_exchange(market, side="SELL"):
-    """Universal fetcher for any exchange via p2p.army API"""
+    """Universal fetcher with ROBUST volume detection"""
     url = "https://p2p.army/v1/api/get_p2p_order_book"
     ads = []
     h = HEADERS.copy()
@@ -166,27 +166,49 @@ def fetch_p2p_army_exchange(market, side="SELL"):
         r = requests.post(url, headers=h, json=payload, timeout=10)
         data = r.json()
         
-        # Parse response (handles multiple formats)
         candidates = data.get("result", data.get("data", data.get("ads", [])))
         if not candidates and isinstance(data, list):
             candidates = data
         
+        # --- DEBUG: Print keys of the first ad to see what they call "volume" ---
+        if candidates and len(ads) == 0: 
+            first = candidates[0]
+            # Only print this once per run to avoid spam
+            if not hasattr(fetch_p2p_army_exchange, "debug_printed"):
+                print(f"    🔍 DEBUG API KEYS: {list(first.keys())}", file=sys.stderr)
+                fetch_p2p_army_exchange.debug_printed = True
+        # -----------------------------------------------------------------------
+
         if candidates:
             for ad in candidates:
                 if isinstance(ad, dict) and 'price' in ad:
                     try:
+                        # ROBUST VOLUME FINDER: Try all known keys
+                        vol = 0
+                        for key in ['available_amount', 'amount', 'surplus_amount', 'stock', 'max_amount', 'dynamic_max_amount']:
+                            if key in ad and ad[key]:
+                                try:
+                                    v = float(ad[key])
+                                    if v > 0:
+                                        vol = v
+                                        break
+                                except: continue
+                        
+                        # If still 0, skip this ad (it's useless for volume tracking)
+                        if vol == 0: continue
+
                         ads.append({
                             'source': market.upper(),
                             'advertiser': ad.get('advertiser_name', ad.get('nickname', f'{market} User')),
                             'price': float(ad['price']),
-                            'available': float(ad.get('available_amount', ad.get('amount', 0))),
+                            'available': vol, # Use the robust volume we found
                         })
                     except Exception as e:
                         continue
         
-        print(f"   {market.upper()} {side}: {len(ads)} ads", file=sys.stderr)
+        print(f"    {market.upper()} {side}: {len(ads)} ads", file=sys.stderr)
     except Exception as e:
-        print(f"   {market.upper()} {side} error: {e}", file=sys.stderr)
+        print(f"    {market.upper()} {side} error: {e}", file=sys.stderr)
     
     return ads
 
