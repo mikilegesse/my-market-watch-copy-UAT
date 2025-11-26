@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v37.0 (Complete Edition)
-- EXCHANGES: Binance, MEXC, OKX (all via p2p.army API)
+🇪🇹 ETB Financial Terminal v38.0 (Major Rewrite - Direct APIs!)
+- MAJOR: Use Binance P2P API directly (NOT p2p.army!)
+- MAJOR: Track ad appearances/disappearances (not just inventory)
+- NEW: 3-way detection: Inventory changes + New ads + Disappeared ads
+- FIX: Should finally catch trades properly!
+- KEEP: MEXC/OKX still use p2p.army (they work)
+- CRITICAL: This is complete detection system rewrite
+- NOTE: 45s wait time still optimal
+- EXCHANGES: Binance (Direct API), MEXC, OKX (p2p.army)
 - TICKER: NYSE-style sliding rate ticker at top
-- CHARTS: Interactive tooltips on hover
-- TRACKING: Buy + Sell with proper feed display
+- CHARTS: Clean with latest label + volume bars
+- TRACKING: 1H/Today/Week/24h statistics
 - UI: Enhanced Robinhood-style interface
 """
 
@@ -38,6 +45,27 @@ GRAPH_FILENAME = "etb_neon_terminal.png"
 GRAPH_LIGHT_FILENAME = "etb_light_terminal.png"
 HTML_FILENAME = "index.html"
 
+# TIMING CONFIGURATION
+# BURST_WAIT_TIME determines how long we wait between API checks to detect trades
+# Strategy: SHORT wait (45s) catches MORE trades, not fewer!
+# 
+# How it works:
+# 1. Fetch ads at T=0
+# 2. Wait 45 seconds
+# 3. Fetch ads again at T=45s
+# 4. Compare: Ads that disappeared = SOLD, Ads that appeared = BOUGHT
+#
+# Why 45 seconds is optimal:
+# - Too short (10s): Ads might not have time to appear/disappear
+# - Too long (10min): Miss fast trades, fewer checks per GitHub Actions run
+# - 45s: Sweet spot - proven by v29.1 testing
+#
+# With GitHub Actions running every ~3 minutes:
+# - Each run does 1-2 checks
+# - 45s wait allows enough time for ad state changes
+# - Catches both quick and slow trades
+#
+# DO NOT increase to 10 minutes - this will REDUCE trade detection!
 BURST_WAIT_TIME = 45
 TRADE_RETENTION_MINUTES = 1440  # 24 hours
 MAX_ADS_PER_SOURCE = 200
@@ -61,6 +89,53 @@ def fetch_usdt_peg():
         return float(requests.get("https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=usd", timeout=5).json()["tether"]["usd"])
     except:
         return 1.00
+
+def fetch_binance_p2p_direct(side="SELL"):
+    """Fetch Binance P2P directly from their API (more reliable!)"""
+    url = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
+    ads = []
+    
+    try:
+        payload = {
+            "asset": "USDT",
+            "fiat": "ETB",
+            "merchantCheck": False,
+            "page": 1,
+            "payTypes": [],
+            "publisherType": None,
+            "rows": 20,
+            "tradeType": side,  # "SELL" or "BUY"
+        }
+        
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        
+        r = requests.post(url, headers=headers, json=payload, timeout=10)
+        data = r.json()
+        
+        if data.get("success") and data.get("data"):
+            for item in data["data"]:
+                adv = item.get("adv", {})
+                advertiser = item.get("advertiser", {})
+                
+                try:
+                    ads.append({
+                        'source': 'BINANCE',
+                        'advertiser': advertiser.get('nickName', 'Binance User'),
+                        'price': float(adv.get('price', 0)),
+                        'available': float(adv.get('surplusAmount', 0)),
+                        'ad_id': adv.get('advNo', ''),  # Unique ad ID for tracking
+                    })
+                except Exception as e:
+                    continue
+        
+        print(f"   BINANCE (Direct API): {len(ads)} ads", file=sys.stderr)
+    except Exception as e:
+        print(f"   BINANCE (Direct API) error: {e}", file=sys.stderr)
+    
+    return ads
 
 def fetch_p2p_army_exchange(market, side="SELL"):
     """Universal fetcher for any exchange via p2p.army API"""
@@ -101,7 +176,7 @@ def fetch_p2p_army_exchange(market, side="SELL"):
 # --- MARKET SNAPSHOT ---
 def capture_market_snapshot():
     with ThreadPoolExecutor(max_workers=10) as ex:
-        f_binance = ex.submit(lambda: fetch_p2p_army_exchange("binance"))
+        f_binance = ex.submit(fetch_binance_p2p_direct)  # Use direct Binance API!
         f_mexc = ex.submit(lambda: fetch_p2p_army_exchange("mexc"))
         f_okx = ex.submit(lambda: fetch_p2p_army_exchange("okx"))
         f_peg = ex.submit(fetch_usdt_peg)
@@ -112,7 +187,10 @@ def capture_market_snapshot():
         peg = f_peg.result() or 1.0
         
         total_before = len(binance_data) + len(mexc_data) + len(okx_data)
-        print(f"   📊 Collected {total_before} ads (Binance: {len(binance_data)}, MEXC: {len(mexc_data)}, OKX: {len(okx_data)})", file=sys.stderr)
+        print(f"   📊 Collected {total_before} ads total", file=sys.stderr)
+        print(f"      Binance: {len(binance_data)} sells, 0 buys", file=sys.stderr)
+        print(f"      MEXC: {len(mexc_data)} ads", file=sys.stderr)
+        print(f"      OKX: {len(okx_data)} ads", file=sys.stderr)
         
         # Remove lowest 10% outliers
         binance_data = remove_outliers(binance_data, peg)
@@ -153,7 +231,7 @@ def save_market_state(current_ads):
         json.dump(state, f)
 
 def detect_real_trades(current_ads, peg):
-    """Track BOTH buyers and sellers"""
+    """Enhanced detection: Track inventory changes + ad appearances/disappearances"""
     prev_state = load_market_state()
     
     if not prev_state:
@@ -162,7 +240,55 @@ def detect_real_trades(current_ads, peg):
     
     trades = []
     sources_checked = {'BINANCE': 0, 'MEXC': 0, 'OKX': 0}
+    inventory_changes = []  # Track all inventory changes for debugging
     
+    # Build current state for comparison
+    current_state = {}
+    for ad in current_ads:
+        key = f"{ad['source']}_{ad['advertiser']}_{ad['price']}"
+        current_state[key] = ad['available']
+    
+    # 1. Check for DISAPPEARED ads (someone bought entire ad!)
+    disappeared_ads = set(prev_state.keys()) - set(current_state.keys())
+    for key in disappeared_ads:
+        parts = key.split('_')
+        if len(parts) >= 3:
+            source = parts[0].upper()
+            if source in sources_checked:
+                vol = prev_state[key]
+                if vol >= 10:  # Only count if significant volume
+                    trades.append({
+                        'type': 'sell',
+                        'source': source,
+                        'user': parts[1],
+                        'price': float(parts[2]) / peg,
+                        'vol_usd': vol,
+                        'timestamp': time.time()
+                    })
+                    print(f"   🔴 SOLD OUT: {source} - {parts[1][:15]} (ad disappeared, {vol:,.0f} USDT)", file=sys.stderr)
+    
+    # 2. Check for NEW ads (someone posted new listing!)
+    new_ads = set(current_state.keys()) - set(prev_state.keys())
+    for key in new_ads:
+        for ad in current_ads:
+            ad_key = f"{ad['source']}_{ad['advertiser']}_{ad['price']}"
+            if ad_key == key:
+                source = ad['source'].upper()
+                if source in sources_checked:
+                    vol = ad['available']
+                    if vol >= 10:  # Only count if significant volume
+                        trades.append({
+                            'type': 'buy',
+                            'source': source,
+                            'user': ad['advertiser'],
+                            'price': ad['price'] / peg,
+                            'vol_usd': vol,
+                            'timestamp': time.time()
+                        })
+                        print(f"   🟢 NEW AD: {source} - {ad['advertiser'][:15]} (posted {vol:,.0f} USDT)", file=sys.stderr)
+                break
+    
+    # 3. Check for INVENTORY CHANGES in existing ads
     for ad in current_ads:
         source = ad['source'].upper()
         if source not in sources_checked:
@@ -177,8 +303,19 @@ def detect_real_trades(current_ads, peg):
             curr_inventory = ad['available']
             diff = abs(curr_inventory - prev_inventory)
             
-            # SELL: Inventory dropped
-            if curr_inventory < prev_inventory and diff > 5:
+            # Log inventory changes (even small ones)
+            if diff > 0:
+                inventory_changes.append({
+                    'source': source,
+                    'user': ad['advertiser'][:15],
+                    'prev': prev_inventory,
+                    'curr': curr_inventory,
+                    'diff': diff,
+                    'direction': 'down' if curr_inventory < prev_inventory else 'up'
+                })
+            
+            # SELL: Inventory dropped (lowered threshold from 5 to 1 USDT)
+            if curr_inventory < prev_inventory and diff >= 1:
                 trades.append({
                     'type': 'sell',
                     'source': source,
@@ -189,8 +326,8 @@ def detect_real_trades(current_ads, peg):
                 })
                 print(f"   🔴 SELL: {source} - {ad['advertiser'][:15]} sold {diff:,.0f} USDT @ {ad['price']/peg:.2f} ETB", file=sys.stderr)
             
-            # BUY: Inventory increased  
-            elif curr_inventory > prev_inventory and diff > 5:
+            # BUY: Inventory increased (lowered threshold from 5 to 1 USDT)
+            elif curr_inventory > prev_inventory and diff >= 1:
                 trades.append({
                     'type': 'buy',
                     'source': source,
@@ -201,7 +338,18 @@ def detect_real_trades(current_ads, peg):
                 })
                 print(f"   🟢 BUY: {source} - {ad['advertiser'][:15]} bought {diff:,.0f} USDT @ {ad['price']/peg:.2f} ETB", file=sys.stderr)
     
-    print(f"   > Checked: Binance={sources_checked.get('BINANCE', 0)}, MEXC={sources_checked.get('MEXC', 0)}, OKX={sources_checked.get('OKX', 0)}", file=sys.stderr)
+    # Debug: Show inventory changes detected
+    if inventory_changes:
+        print(f"\n   📊 Inventory Changes Detected: {len(inventory_changes)}", file=sys.stderr)
+        for i, change in enumerate(inventory_changes[:5]):  # Show first 5
+            print(f"      {i+1}. {change['source']} {change['user']}: {change['prev']} → {change['curr']} ({change['direction']} {change['diff']} USDT)", file=sys.stderr)
+        if len(inventory_changes) > 5:
+            print(f"      ... and {len(inventory_changes)-5} more changes", file=sys.stderr)
+    else:
+        print(f"\n   ⚠️  NO inventory changes detected between snapshots!", file=sys.stderr)
+        print(f"   This means: No ads appeared, disappeared, or had inventory changes", file=sys.stderr)
+    
+    print(f"\n   > Checked: Binance={sources_checked.get('BINANCE', 0)}, MEXC={sources_checked.get('MEXC', 0)}, OKX={sources_checked.get('OKX', 0)}", file=sys.stderr)
     print(f"   > Detected {len(trades)} trades ({len([t for t in trades if t['type']=='buy'])} buys, {len([t for t in trades if t['type']=='sell'])} sells)", file=sys.stderr)
     return trades
 
@@ -387,10 +535,33 @@ def generate_charts(stats, official_rate):
         # Bottom: Historical Trend
         ax2 = fig.add_subplot(2, 1, 2)
         if len(dates) > 1:
-            ax2.fill_between(dates, q1s, q3s, color=style["fill"], alpha=0.2, linewidth=0)
-            ax2.plot(dates, medians, color=style["median"], linewidth=2)
+            # Use yellow for fill area, green for line
+            ax2.fill_between(dates, q1s, q3s, color='#FFD700' if mode == 'dark' else '#FFA500', alpha=0.15, linewidth=0)
+            
+            # Plot black market rate (green line)
+            line1 = ax2.plot(dates, medians, color='#00ff9d' if mode == 'dark' else '#00a876', linewidth=2.5, label='Black Market Rate')[0]
+            
+            # Plot official rate (dotted line)
             if any(offs):
-                ax2.plot(dates, offs, color=style["fg"], linestyle="--", linewidth=1, alpha=0.5)
+                line2 = ax2.plot(dates, offs, color=style["fg"], linestyle="--", linewidth=1.5, alpha=0.7, label='Official Rate')[0]
+            
+            # Add ONLY THE LATEST label in bright color
+            if len(medians) > 0:
+                latest_idx = len(medians) - 1
+                # Latest black market rate in bright cyan
+                ax2.text(dates[latest_idx], medians[latest_idx], f'{medians[latest_idx]:.1f}', 
+                        fontsize=10, ha='left', va='bottom', color='#00ffff',
+                        fontweight='bold', bbox=dict(boxstyle='round,pad=0.3', facecolor='black', alpha=0.7))
+                
+                # Latest official rate in white
+                if latest_idx < len(offs) and offs[latest_idx]:
+                    ax2.text(dates[latest_idx], offs[latest_idx], f'{offs[latest_idx]:.1f}', 
+                            fontsize=9, ha='left', va='top', color='white', 
+                            fontweight='bold', bbox=dict(boxstyle='round,pad=0.3', facecolor='black', alpha=0.7))
+            
+            # Add legend
+            ax2.legend(loc='upper left', framealpha=0.8, facecolor=style["bg"], edgecolor=style["fg"])
+            
             ax2.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M"))
             ax2.yaxis.set_major_formatter(ticker.FormatStrFormatter("%.1f"))
             ax2.yaxis.tick_right()
@@ -400,6 +571,98 @@ def generate_charts(stats, official_rate):
         plt.tight_layout(rect=[0, 0, 1, 0.95])
         plt.savefig(filename, dpi=150, facecolor=style["bg"])
         plt.close()
+
+# --- STATISTICS CALCULATOR ---
+def calculate_trade_stats(trades):
+    """Calculate 1H/Today/Week/Overall trade statistics"""
+    import datetime
+    
+    now = datetime.datetime.now()
+    hour_ago = (now - datetime.timedelta(hours=1)).timestamp()
+    today_start = datetime.datetime(now.year, now.month, now.day).timestamp()
+    week_ago = (now - datetime.timedelta(days=7)).timestamp()
+    
+    stats = {
+        'hour_buys': 0, 'hour_sells': 0, 'hour_buy_volume': 0, 'hour_sell_volume': 0,
+        'today_buys': 0, 'today_sells': 0, 'today_buy_volume': 0, 'today_sell_volume': 0,
+        'week_buys': 0, 'week_sells': 0, 'week_buy_volume': 0, 'week_sell_volume': 0,
+        'overall_buys': 0, 'overall_sells': 0, 'overall_buy_volume': 0, 'overall_sell_volume': 0
+    }
+    
+    for trade in trades:
+        ts = trade.get('timestamp', 0)
+        vol = trade.get('vol_usd', 0)
+        trade_type = trade.get('type', '')
+        
+        # Overall (all trades in 24h history)
+        if trade_type == 'buy':
+            stats['overall_buys'] += 1
+            stats['overall_buy_volume'] += vol
+        elif trade_type == 'sell':
+            stats['overall_sells'] += 1
+            stats['overall_sell_volume'] += vol
+        
+        # Last 7 days
+        if ts >= week_ago:
+            if trade_type == 'buy':
+                stats['week_buys'] += 1
+                stats['week_buy_volume'] += vol
+            elif trade_type == 'sell':
+                stats['week_sells'] += 1
+                stats['week_sell_volume'] += vol
+        
+        # Today (since midnight)
+        if ts >= today_start:
+            if trade_type == 'buy':
+                stats['today_buys'] += 1
+                stats['today_buy_volume'] += vol
+            elif trade_type == 'sell':
+                stats['today_sells'] += 1
+                stats['today_sell_volume'] += vol
+        
+        # Last hour
+        if ts >= hour_ago:
+            if trade_type == 'buy':
+                stats['hour_buys'] += 1
+                stats['hour_buy_volume'] += vol
+            elif trade_type == 'sell':
+                stats['hour_sells'] += 1
+                stats['hour_sell_volume'] += vol
+    
+    return stats
+
+def calculate_volume_by_exchange(trades):
+    """Calculate buy/sell volume by exchange for last 24h"""
+    volumes = {}
+    
+    # Debug: print sample trades
+    print(f"\n🔍 DEBUG: calculate_volume_by_exchange received {len(trades)} trades", file=sys.stderr)
+    if len(trades) > 0:
+        print(f"   Sample trade: {trades[0]}", file=sys.stderr)
+    
+    for trade in trades:
+        source = trade.get('source', 'Unknown')
+        vol = trade.get('vol_usd', 0)
+        trade_type = trade.get('type', '')
+        
+        # Debug: print first few trades
+        if len(volumes) < 3:
+            print(f"   Processing: source={source}, type={trade_type}, vol={vol}", file=sys.stderr)
+        
+        if source not in volumes:
+            volumes[source] = {'buy': 0, 'sell': 0, 'total': 0}
+        
+        if trade_type == 'buy':
+            volumes[source]['buy'] += vol
+        elif trade_type == 'sell':
+            volumes[source]['sell'] += vol
+        
+        volumes[source]['total'] += vol
+    
+    # Debug: print results
+    print(f"   📊 Volume results: {volumes}", file=sys.stderr)
+    
+    return volumes
 
 # --- HTML GENERATOR ---
 def update_website_html(stats, official, timestamp, current_ads, grouped_ads, peg):
@@ -468,14 +731,108 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
     # Generate feed HTML (server-side rendering of initial state)
     feed_html = generate_feed_html(recent_trades, peg)
     
+    # Calculate trade statistics
+    trade_stats = calculate_trade_stats(recent_trades)
+    hour_buys = trade_stats['hour_buys']
+    hour_sells = trade_stats['hour_sells']
+    hour_buy_volume = trade_stats['hour_buy_volume']
+    hour_sell_volume = trade_stats['hour_sell_volume']
+    today_buys = trade_stats['today_buys']
+    today_sells = trade_stats['today_sells']
+    today_buy_volume = trade_stats['today_buy_volume']
+    today_sell_volume = trade_stats['today_sell_volume']
+    week_buys = trade_stats['week_buys']
+    week_sells = trade_stats['week_sells']
+    week_buy_volume = trade_stats['week_buy_volume']
+    week_sell_volume = trade_stats['week_sell_volume']
+    overall_buys = trade_stats['overall_buys']
+    overall_sells = trade_stats['overall_sells']
+    overall_buy_volume = trade_stats['overall_buy_volume']
+    overall_sell_volume = trade_stats['overall_sell_volume']
+    
+    # Debug: Print trade stats for comparison
+    print(f"\n📈 Trade Statistics:", file=sys.stderr)
+    print(f"   Total trades: {len(recent_trades)} ({buys_count} buys, {sells_count} sells)", file=sys.stderr)
+    print(f"   Buy volume: ${overall_buy_volume:,.0f}", file=sys.stderr)
+    print(f"   Sell volume: ${overall_sell_volume:,.0f}", file=sys.stderr)
+    
+    # Calculate volume by exchange
+    volume_by_exchange = calculate_volume_by_exchange(recent_trades)
+    
+    # Debug logging
+    print(f"\n📊 Volume by Exchange:")
+    for source, data in volume_by_exchange.items():
+        print(f"  {source}: Buy ${data['buy']:,.0f}, Sell ${data['sell']:,.0f}, Total ${data['total']:,.0f}")
+    
+    # Create volume chart HTML - ALWAYS show all exchanges
+    volume_chart_html = ""
+    if not volume_by_exchange or all(v['total'] == 0 for v in volume_by_exchange.values()):
+        # No data yet - show placeholder
+        volume_chart_html = """
+        <div style="text-align:center;padding:40px;color:var(--text-secondary)">
+            <div style="font-size:48px;margin-bottom:16px">📊</div>
+            <div style="font-size:16px;font-weight:600;margin-bottom:8px">No Volume Data Yet</div>
+            <div style="font-size:14px">Waiting for trade detection...</div>
+        </div>
+        """
+    else:
+        max_volume = max([v['total'] for v in volume_by_exchange.values()])
+        
+        for source in ['BINANCE', 'MEXC', 'OKX']:
+            # Get data or default to 0
+            data = volume_by_exchange.get(source, {'buy': 0, 'sell': 0, 'total': 0})
+            buy_pct = (data['buy'] / max_volume * 100) if max_volume > 0 else 0
+            sell_pct = (data['sell'] / max_volume * 100) if max_volume > 0 else 0
+            
+            # Ensure minimum visible width if there's any volume
+            if data['buy'] > 0 and buy_pct < 2:
+                buy_pct = 2
+            if data['sell'] > 0 and sell_pct < 2:
+                sell_pct = 2
+            
+            # Source emoji and color
+            emoji = '🟡' if source == 'BINANCE' else ('🔵' if source == 'MEXC' else '🟣')
+            color = '#F3BA2F' if source == 'BINANCE' else ('#2E55E6' if source == 'MEXC' else '#A855F7')
+            
+            volume_chart_html += f"""
+            <div class="volume-row">
+                <div class="volume-source">
+                    <span style="font-size:20px">{emoji}</span>
+                    <span style="color:{color};font-weight:600">{source}</span>
+                </div>
+                <div class="volume-bars">
+                    <div class="volume-bar-group">
+                        <div class="volume-bar buy-bar" style="width:{buy_pct}%"></div>
+                        <span class="volume-label buy-label">${data['buy']:,.0f}</span>
+                    </div>
+                    <div class="volume-bar-group">
+                        <div class="volume-bar sell-bar" style="width:{sell_pct}%"></div>
+                        <span class="volume-label sell-label">${data['sell']:,.0f}</span>
+                    </div>
+                </div>
+            </div>
+            """
+    
     # Generate ticker HTML
     ticker_html = ""
     for item in ticker_items * 3:  # Repeat for continuous scroll
         change_symbol = "▲" if item['change'] > 0 else "▼" if item['change'] < 0 else "━"
         change_color = "#00C805" if item['change'] > 0 else "#FF3B30" if item['change'] < 0 else "#8E8E93"
+        
+        # Add emoji and color for each source
+        source_display = item['source']
+        if item['source'] == 'BINANCE':
+            source_display = f"🟡 {item['source']}"
+        elif item['source'] == 'MEXC':
+            source_display = f"🔵 {item['source']}"
+        elif item['source'] == 'OKX':
+            source_display = f"🟣 {item['source']}"
+        elif item['source'] == 'Official':
+            source_display = f"💵 {item['source']}"
+        
         ticker_html += f"""
         <div class="ticker-item">
-            <span class="ticker-source">{item['source']}</span>
+            <span class="ticker-source">{source_display}</span>
             <span class="ticker-price">{item['median']:.2f} ETB</span>
             <span class="ticker-change" style="color:{change_color}">{change_symbol}</span>
         </div>
@@ -775,10 +1132,11 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             
             .source-col {{
                 font-weight: 600;
+                color: #00ff9d;  /* Green like terminal */
             }}
             
             .med-col {{
-                color: var(--accent);
+                color: #ff0066;  /* Pink/Magenta for median */
                 font-weight: 700;
             }}
             
@@ -874,16 +1232,208 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             
             .feed-user {{
                 font-weight: 600;
-                color: var(--text);
+                font-family: 'Courier New', monospace;
+                color: #00ff9d;
             }}
             
             .feed-amount {{
                 font-weight: 700;
-                color: var(--accent);
+                color: #00bfff;
             }}
             
             .feed-price {{
                 font-weight: 600;
+            }}
+            
+            .stats-panel {{
+                background: var(--card);
+                border-radius: 12px;
+                padding: 20px;
+                margin: 20px;
+                border: 1px solid var(--border);
+            }}
+            
+            .stats-title {{
+                font-size: 18px;
+                font-weight: 700;
+                color: var(--text);
+                margin-bottom: 20px;
+                text-align: center;
+            }}
+            
+            .stats-section {{
+                margin-bottom: 24px;
+            }}
+            
+            .stats-section:last-child {{
+                margin-bottom: 0;
+            }}
+            
+            .stats-section-title {{
+                font-size: 16px;
+                font-weight: 600;
+                color: var(--text);
+                margin-bottom: 12px;
+                padding-bottom: 8px;
+                border-bottom: 1px solid var(--border);
+            }}
+            
+            .stats-grid {{
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+                gap: 12px;
+            }}
+            
+            .stat-card {{
+                background: rgba(10, 132, 255, 0.05);
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                padding: 16px;
+                text-align: center;
+                transition: all 0.2s ease;
+            }}
+            
+            .buy-card {{
+                background: rgba(0, 200, 5, 0.08);
+                border-color: rgba(0, 200, 5, 0.3);
+            }}
+            
+            .buy-card:hover {{
+                transform: translateY(-2px);
+                border-color: #00C805;
+                box-shadow: 0 4px 12px rgba(0, 200, 5, 0.2);
+            }}
+            
+            .sell-card {{
+                background: rgba(255, 59, 48, 0.08);
+                border-color: rgba(255, 59, 48, 0.3);
+            }}
+            
+            .sell-card:hover {{
+                transform: translateY(-2px);
+                border-color: #FF3B30;
+                box-shadow: 0 4px 12px rgba(255, 59, 48, 0.2);
+            }}
+            
+            .stat-label {{
+                font-size: 12px;
+                color: var(--text-secondary);
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 8px;
+                font-weight: 600;
+            }}
+            
+            .stat-value {{
+                font-size: 32px;
+                font-weight: 700;
+                margin-bottom: 6px;
+            }}
+            
+            .stat-value.green {{
+                color: #00C805;
+            }}
+            
+            .stat-value.red {{
+                color: #FF3B30;
+            }}
+            
+            .stat-volume {{
+                font-size: 13px;
+                color: #00bfff;
+                font-weight: 600;
+            }}
+            
+            .volume-chart-panel {{
+                background: var(--card);
+                border-radius: 12px;
+                padding: 20px;
+                margin: 20px;
+                border: 1px solid var(--border);
+            }}
+            
+            .volume-chart-title {{
+                font-size: 18px;
+                font-weight: 700;
+                color: var(--text);
+                margin-bottom: 20px;
+                text-align: center;
+            }}
+            
+            .volume-legend {{
+                display: flex;
+                justify-content: center;
+                gap: 24px;
+                margin-bottom: 20px;
+                font-size: 13px;
+            }}
+            
+            .volume-legend-item {{
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }}
+            
+            .volume-legend-box {{
+                width: 16px;
+                height: 16px;
+                border-radius: 4px;
+            }}
+            
+            .volume-row {{
+                display: grid;
+                grid-template-columns: 150px 1fr;
+                gap: 20px;
+                margin-bottom: 16px;
+                align-items: center;
+            }}
+            
+            .volume-source {{
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 14px;
+            }}
+            
+            .volume-bars {{
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }}
+            
+            .volume-bar-group {{
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }}
+            
+            .volume-bar {{
+                height: 24px;
+                border-radius: 4px;
+                transition: width 0.3s ease;
+                min-width: 2px;
+            }}
+            
+            .buy-bar {{
+                background: linear-gradient(90deg, #00C805 0%, #00ff9d 100%);
+            }}
+            
+            .sell-bar {{
+                background: linear-gradient(90deg, #FF3B30 0%, #ff6b6b 100%);
+            }}
+            
+            .volume-label {{
+                font-size: 13px;
+                font-weight: 600;
+                min-width: 100px;
+            }}
+            
+            .buy-label {{
+                color: #00C805;
+            }}
+            
+            .sell-label {{
+                color: #FF3B30;
             }}
             
             footer {{
@@ -1020,7 +1570,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                                 🔵 MEXC
                             </button>
                             <button class="source-filter-btn" data-source="OKX" onclick="filterBySource('OKX')" style="background:transparent;color:var(--text-secondary);border:1px solid var(--border);padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
-                                ⚫ OKX
+                                🟣 OKX
                             </button>
                         </div>
                     </div>
@@ -1030,9 +1580,85 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                 </div>
             </div>
             
+            
+            <!-- Volume Comparison Chart -->
+            <div class="volume-chart-panel">
+                <div class="volume-chart-title">24h Volume by Exchange (Buy vs Sell)</div>
+                <div class="volume-legend">
+                    <div class="volume-legend-item">
+                        <div class="volume-legend-box buy-bar"></div>
+                        <span>Buy Volume</span>
+                    </div>
+                    <div class="volume-legend-item">
+                        <div class="volume-legend-box sell-bar"></div>
+                        <span>Sell Volume</span>
+                    </div>
+                </div>
+                {volume_chart_html}
+            </div>
+            
+            <!-- Transaction Statistics Panel -->
+            <div class="stats-panel">
+                <div class="stats-title">Transaction Statistics (Within 24 hrs)</div>
+                
+                <!-- Buy Transactions -->
+                <div class="stats-section">
+                    <div class="stats-section-title">🟢 Buy Transactions</div>
+                    <div class="stats-grid">
+                        <div class="stat-card buy-card">
+                            <div class="stat-label">Last 1 Hour</div>
+                            <div class="stat-value green">{hour_buys}</div>
+                            <div class="stat-volume">{hour_buy_volume:,.0f} USDT</div>
+                        </div>
+                        <div class="stat-card buy-card">
+                            <div class="stat-label">Today</div>
+                            <div class="stat-value green">{today_buys}</div>
+                            <div class="stat-volume">{today_buy_volume:,.0f} USDT</div>
+                        </div>
+                        <div class="stat-card buy-card">
+                            <div class="stat-label">This Week</div>
+                            <div class="stat-value green">{week_buys}</div>
+                            <div class="stat-volume">{week_buy_volume:,.0f} USDT</div>
+                        </div>
+                        <div class="stat-card buy-card">
+                            <div class="stat-label">Overall (24h)</div>
+                            <div class="stat-value green">{overall_buys}</div>
+                            <div class="stat-volume">{overall_buy_volume:,.0f} USDT</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Sell Transactions -->
+                <div class="stats-section">
+                    <div class="stats-section-title">🔴 Sell Transactions</div>
+                    <div class="stats-grid">
+                        <div class="stat-card sell-card">
+                            <div class="stat-label">Last 1 Hour</div>
+                            <div class="stat-value red">{hour_sells}</div>
+                            <div class="stat-volume">{hour_sell_volume:,.0f} USDT</div>
+                        </div>
+                        <div class="stat-card sell-card">
+                            <div class="stat-label">Today</div>
+                            <div class="stat-value red">{today_sells}</div>
+                            <div class="stat-volume">{today_sell_volume:,.0f} USDT</div>
+                        </div>
+                        <div class="stat-card sell-card">
+                            <div class="stat-label">This Week</div>
+                            <div class="stat-value red">{week_sells}</div>
+                            <div class="stat-volume">{week_sell_volume:,.0f} USDT</div>
+                        </div>
+                        <div class="stat-card sell-card">
+                            <div class="stat-label">Overall (24h)</div>
+                            <div class="stat-value red">{overall_sells}</div>
+                            <div class="stat-volume">{overall_sell_volume:,.0f} USDT</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <footer>
                 Official Rate: {official:.2f} ETB | Last Update: {timestamp} UTC<br>
-                v37.0 Complete Edition • Binance, MEXC, OKX • 45s tracking, 24h history
+                v38.0 Direct APIs • 🟡 Binance (Direct API!) 🔵 MEXC 🟣 OKX • Tracks New/Disappeared/Changed ads
             </footer>
         </div>
         
@@ -1110,7 +1736,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                 }});
                 
                 if (currentSource !== 'all') {{
-                    filtered = filtered.filter(t => t.source === currentSource);
+                    filtered = filtered.filter(t => t.source.toUpperCase() === currentSource.toUpperCase());
                 }}
                 
                 renderFeed(filtered);
@@ -1129,7 +1755,10 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                     return;
                 }}
                 
-                const html = trades.slice(0, 50).reverse().map(trade => {{
+                // Sort by timestamp DESC (newest first), then take top 50
+                const sorted = trades.sort((a, b) => b.timestamp - a.timestamp).slice(0, 50);
+                
+                const html = sorted.map(trade => {{
                     const date = new Date(trade.timestamp * 1000);
                     const time = date.toLocaleTimeString('en-US', {{hour: '2-digit', minute: '2-digit'}});
                     const ageMin = Math.floor((Date.now() / 1000 - trade.timestamp) / 60);
@@ -1142,14 +1771,14 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                     
                     let sourceColor, sourceEmoji;
                     if (trade.source === 'BINANCE') {{
-                        sourceColor = '#F3BA2F';
+                        sourceColor = '#F3BA2F';  // Yellow
                         sourceEmoji = '🟡';
                     }} else if (trade.source === 'MEXC') {{
-                        sourceColor = '#2E55E6';
+                        sourceColor = '#2E55E6';  // Blue
                         sourceEmoji = '🔵';
                     }} else {{
-                        sourceColor = '#000000';
-                        sourceEmoji = '⚫';
+                        sourceColor = '#A855F7';  // Purple (OKX)
+                        sourceEmoji = '🟣';
                     }}
                     
                     return `
@@ -1222,11 +1851,11 @@ def generate_feed_html(trades, peg):
         
         source = trade.get('source', 'Unknown')
         if source == 'BINANCE':
-            emoji, color = '🟡', '#F3BA2F'
+            emoji, color = '🟡', '#F3BA2F'  # Yellow
         elif source == 'MEXC':
-            emoji, color = '🔵', '#2E55E6'
+            emoji, color = '🔵', '#2E55E6'  # Blue
         else:
-            emoji, color = '⚫', '#000000'
+            emoji, color = '🟣', '#A855F7'  # Purple (OKX)
         
         html += f"""
         <div class="feed-item">
