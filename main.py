@@ -71,7 +71,7 @@ HTML_FILENAME = "index.html"
 # - Catches both quick and slow trades
 #
 # DO NOT increase to 10 minutes - this will REDUCE trade detection!
-BURST_WAIT_TIME = 45
+BURST_WAIT_TIME = 200
 TRADE_RETENTION_MINUTES = 1440  # 24 hours
 MAX_ADS_PER_SOURCE = 200
 HISTORY_POINTS = 288
