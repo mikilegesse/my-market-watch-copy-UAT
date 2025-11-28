@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v38.5 (Delimiter Fix - CRITICAL!)
-- FIX: Changed key delimiter from _ to ||| (fixes username underscore bug!)
-- FIX: Prevents crash when usernames contain underscores (e.g., "Crypto_man")
-- FIX: Added try/except for price parsing (extra safety)
-- CRITICAL: Fixes "could not convert string to float" error
-- WORKING: Still detecting 50+ trades per run! 🎉
-- KEEP: Robust volume detection (v38.4)
-- KEEP: Robust username detection (v38.4)
-- KEEP: Save baseline snapshot (v38.3)
-- KEEP: Consistent snapshots (v38.3)
-- KEEP: Fetch BOTH buy AND sell ads via p2p.army
-- KEEP: 3-way detection (disappeared/new/changed)
-- NOTE: 45s wait time still optimal
-- EXCHANGES: Binance, MEXC, OKX (all via p2p.army)
+🇪🇹 ETB Financial Terminal v41.0 (AGGRESSOR LOGIC FIXED + Bybit!)
+- CRITICAL FIX: Correct aggressor tracking (GREEN = buying demand, RED = selling pressure)
+- NEW: Bybit support via p2p.army API!
+- NEW: Request tracking (like ethioblackmarket.com shows new ads/requests)
+- FIX: SELL_AD inventory drops → Aggressor BOUGHT (GREEN) ← Was backwards!
+- FIX: BUY_AD inventory drops → Aggressor SOLD (RED) ← Was backwards!
+- KEEP: p2p.army API ($200/month but worth it for aggregation!)
+- KEEP: 8 snapshots per run (v40.0 - 58% coverage)
+- KEEP: 15s intervals (v40.0)
+- KEEP: Delimiter fix (v38.5 - no crashes)
+- KEEP: Robust detection (v38.4)
+- EXCHANGES: Binance, MEXC, OKX, Bybit (all via p2p.army!)
 - TICKER: NYSE-style sliding rate ticker at top
 - CHARTS: Clean with latest label + volume bars
-- TRACKING: 1H/Today/Week/24h statistics
+- TRACKING: 1H/Today/Week/24h statistics + REQUESTS!
 - UI: Enhanced Robinhood-style interface
 """
 
@@ -71,7 +69,7 @@ HTML_FILENAME = "index.html"
 # - Catches both quick and slow trades
 #
 # DO NOT increase to 10 minutes - this will REDUCE trade detection!
-BURST_WAIT_TIME = 200
+BURST_WAIT_TIME = 45
 TRADE_RETENTION_MINUTES = 1440  # 24 hours
 MAX_ADS_PER_SOURCE = 200
 HISTORY_POINTS = 288
@@ -160,7 +158,7 @@ def fetch_binance_p2p_both_sides():
     return ads
 
 def fetch_p2p_army_exchange(market, side="SELL"):
-    """Universal fetcher with ROBUST volume and username detection"""
+    """Universal fetcher with ROBUST volume and username detection + ad_type tracking"""
     url = "https://p2p.army/v1/api/get_p2p_order_book"
     ads = []
     h = HEADERS.copy()
@@ -178,10 +176,10 @@ def fetch_p2p_army_exchange(market, side="SELL"):
         
         # DEBUG: Print keys of first ad to see structure
         if candidates and len(candidates) > 0:
-            if not hasattr(fetch_p2p_army_exchange, f"debug_printed_{market}"):
+            if not hasattr(fetch_p2p_army_exchange, f"debug_printed_{market}_{side}"):
                 first = candidates[0]
-                print(f"   🔍 DEBUG {market.upper()} API KEYS: {list(first.keys())[:10]}", file=sys.stderr)
-                setattr(fetch_p2p_army_exchange, f"debug_printed_{market}", True)
+                print(f"   🔍 DEBUG {market.upper()} {side} API KEYS: {list(first.keys())[:10]}", file=sys.stderr)
+                setattr(fetch_p2p_army_exchange, f"debug_printed_{market}_{side}", True)
         
         if candidates:
             for ad in candidates:
@@ -216,6 +214,7 @@ def fetch_p2p_army_exchange(market, side="SELL"):
                         
                         ads.append({
                             'source': market.upper(),
+                            'ad_type': side,  # CRITICAL: Track if BUY or SELL ad!
                             'advertiser': username,
                             'price': float(ad['price']),
                             'available': vol,
@@ -229,45 +228,52 @@ def fetch_p2p_army_exchange(market, side="SELL"):
     
     return ads
 
-def fetch_binance_both_sides():
-    """Fetch BOTH buy and sell ads from Binance via p2p.army"""
+def fetch_exchange_both_sides(exchange_name):
+    """Fetch BOTH buy and sell ads for any exchange via p2p.army"""
     with ThreadPoolExecutor(max_workers=2) as ex:
-        f_sell = ex.submit(lambda: fetch_p2p_army_exchange("binance", "SELL"))
-        f_buy = ex.submit(lambda: fetch_p2p_army_exchange("binance", "BUY"))
+        f_sell = ex.submit(lambda: fetch_p2p_army_exchange(exchange_name, "SELL"))
+        f_buy = ex.submit(lambda: fetch_p2p_army_exchange(exchange_name, "BUY"))
         
         sell_ads = f_sell.result() or []
         buy_ads = f_buy.result() or []
         
         all_ads = sell_ads + buy_ads
-        print(f"   BINANCE Total: {len(all_ads)} ads ({len(sell_ads)} sells, {len(buy_ads)} buys)", file=sys.stderr)
+        print(f"   {exchange_name.upper()} Total: {len(all_ads)} ads ({len(sell_ads)} sells, {len(buy_ads)} buys)", file=sys.stderr)
         return all_ads
+
+def fetch_binance_both_sides():
+    """Fetch BOTH buy and sell ads from Binance via p2p.army"""
+    return fetch_exchange_both_sides("binance")
+
 # --- MARKET SNAPSHOT ---
 def capture_market_snapshot():
+    """Capture market snapshot from all exchanges (Binance, MEXC, OKX, Bybit)"""
     with ThreadPoolExecutor(max_workers=10) as ex:
-        f_binance = ex.submit(fetch_binance_both_sides)  # Use p2p.army for Binance!
-        f_mexc = ex.submit(lambda: fetch_p2p_army_exchange("mexc", "SELL"))
-        f_okx = ex.submit(lambda: fetch_p2p_army_exchange("okx", "SELL"))
+        f_binance = ex.submit(fetch_exchange_both_sides, "binance")
+        f_mexc = ex.submit(fetch_exchange_both_sides, "mexc")
+        f_okx = ex.submit(fetch_exchange_both_sides, "okx")
+        f_bybit = ex.submit(fetch_exchange_both_sides, "bybit")  # NEW: Bybit support!
         f_peg = ex.submit(fetch_usdt_peg)
         
         binance_data = f_binance.result() or []
         mexc_data = f_mexc.result() or []
         okx_data = f_okx.result() or []
+        bybit_data = f_bybit.result() or []  # NEW!
         peg = f_peg.result() or 1.0
         
-        total_before = len(binance_data) + len(mexc_data) + len(okx_data)
-        print(f"   📊 Collected {total_before} ads total", file=sys.stderr)
-        print(f"      MEXC: {len(mexc_data)} ads", file=sys.stderr)
-        print(f"      OKX: {len(okx_data)} ads", file=sys.stderr)
+        total_before = len(binance_data) + len(mexc_data) + len(okx_data) + len(bybit_data)
+        print(f"   📊 Collected {total_before} ads total (Binance, MEXC, OKX, Bybit)", file=sys.stderr)
         
         # Remove lowest 10% outliers
         binance_data = remove_outliers(binance_data, peg)
         mexc_data = remove_outliers(mexc_data, peg)
         okx_data = remove_outliers(okx_data, peg)
+        bybit_data = remove_outliers(bybit_data, peg)
         
-        total_after = len(binance_data) + len(mexc_data) + len(okx_data)
+        total_after = len(binance_data) + len(mexc_data) + len(okx_data) + len(bybit_data)
         print(f"   ✂️ After filtering: {total_after} ads (removed {total_before - total_after} outliers)", file=sys.stderr)
         
-        return binance_data + mexc_data + okx_data
+        return binance_data + mexc_data + okx_data + bybit_data
 
 def remove_outliers(ads, peg):
     if len(ads) < 10:
@@ -289,17 +295,29 @@ def load_market_state():
     return {}
 
 def save_market_state(current_ads):
+    """
+    Save market state with ad_type included
+    CRITICAL: We need ad_type to determine aggressor direction!
+    """
     state = {}
     for ad in current_ads:
         # Use ||| delimiter to avoid conflicts with underscores in usernames
         key = f"{ad['source']}|||{ad['advertiser']}|||{ad['price']}"
-        state[key] = ad['available']
+        state[key] = {
+            'available': ad['available'],
+            'ad_type': ad.get('ad_type', 'SELL')  # CRITICAL: Save ad type!
+        }
     
     with open(SNAPSHOT_FILE, 'w') as f:
         json.dump(state, f)
 
 def detect_real_trades(current_ads, peg):
-    """Enhanced detection: Track inventory changes + ad appearances/disappearances"""
+    """
+    FIXED AGGRESSOR LOGIC! Tracks what TAKERS do, not MAKERS
+    GREEN = Aggressive buying (demand/capital flight)
+    RED = Aggressive selling (supply/capital return)
+    + Request tracking (like ethioblackmarket.com!)
+    """
     prev_state = load_market_state()
     
     if not prev_state:
@@ -307,125 +325,155 @@ def detect_real_trades(current_ads, peg):
         return []
     
     trades = []
-    sources_checked = {'BINANCE': 0, 'MEXC': 0, 'OKX': 0}
-    inventory_changes = []  # Track all inventory changes for debugging
+    requests = []  # NEW: Track requests (new ads posted)
+    sources_checked = {'BINANCE': 0, 'MEXC': 0, 'OKX': 0, 'BYBIT': 0}  # Added BYBIT!
     
-    # Build current state for comparison (use ||| delimiter to avoid username conflicts)
+    # Build current state with ad_type
     current_state = {}
+    ad_lookup = {}  # For looking up full ad info
     for ad in current_ads:
         key = f"{ad['source']}|||{ad['advertiser']}|||{ad['price']}"
-        current_state[key] = ad['available']
+        current_state[key] = {
+            'available': ad['available'],
+            'ad_type': ad.get('ad_type', 'SELL')
+        }
+        ad_lookup[key] = ad
     
-    # 1. Check for DISAPPEARED ads (someone bought entire ad!)
+    # 1. Check for DISAPPEARED ads (complete fills)
     disappeared_ads = set(prev_state.keys()) - set(current_state.keys())
     for key in disappeared_ads:
-        parts = key.split('|||')  # Use ||| delimiter
+        parts = key.split('|||')
         if len(parts) >= 3:
             source = parts[0].upper()
             username = parts[1]
             try:
                 price = float(parts[2])
             except ValueError:
-                continue  # Skip if price is invalid
+                continue
             
             if source in sources_checked:
-                vol = prev_state[key]
-                if vol >= 10:  # Only count if significant volume
+                prev_data = prev_state[key]
+                # Handle both old format (just number) and new format (dict)
+                if isinstance(prev_data, dict):
+                    vol = prev_data.get('available', 0)
+                    ad_type = prev_data.get('ad_type', 'SELL')
+                else:
+                    vol = prev_data
+                    ad_type = 'SELL'  # Default for old data
+                
+                if vol >= 10:
+                    # CORRECT AGGRESSOR LOGIC!
+                    if ad_type.upper() in ['SELL', 'SELL_AD']:
+                        # SELL ad disappeared = Someone BOUGHT all of it (GREEN)
+                        aggressor_action = 'buy'
+                        emoji = '🟢'
+                        action_desc = 'BOUGHT'
+                    else:
+                        # BUY ad disappeared = Someone SOLD all of it (RED)
+                        aggressor_action = 'sell'
+                        emoji = '🔴'
+                        action_desc = 'SOLD'
+                    
                     trades.append({
-                        'type': 'sell',
+                        'type': aggressor_action,
                         'source': source,
                         'user': username,
                         'price': price / peg,
                         'vol_usd': vol,
-                        'timestamp': time.time()
+                        'timestamp': time.time(),
+                        'reason': 'sold_out'
                     })
-                    print(f"   🔴 SOLD OUT: {source} - {username[:15]} (ad disappeared, {vol:,.0f} USDT)", file=sys.stderr)
+                    print(f"   {emoji} {action_desc}: {source} - {username[:15]} (ad sold out, {vol:,.0f} USDT)", file=sys.stderr)
     
-    # 2. Check for NEW ads (someone posted new listing!)
+    # 2. Check for NEW ads (REQUESTS - like ethioblackmarket.com!)
     new_ads = set(current_state.keys()) - set(prev_state.keys())
     for key in new_ads:
-        for ad in current_ads:
-            ad_key = f"{ad['source']}|||{ad['advertiser']}|||{ad['price']}"
-            if ad_key == key:
-                source = ad['source'].upper()
-                if source in sources_checked:
-                    vol = ad['available']
-                    if vol >= 10:  # Only count if significant volume
-                        trades.append({
-                            'type': 'buy',
-                            'source': source,
-                            'user': ad['advertiser'],
-                            'price': ad['price'] / peg,
-                            'vol_usd': vol,
-                            'timestamp': time.time()
-                        })
-                        print(f"   🟢 NEW AD: {source} - {ad['advertiser'][:15]} (posted {vol:,.0f} USDT)", file=sys.stderr)
-                break
+        ad = ad_lookup.get(key)
+        if ad:
+            source = ad['source'].upper()
+            if source in sources_checked:
+                vol = ad['available']
+                ad_type = ad.get('ad_type', 'SELL')
+                
+                if vol >= 10:
+                    # NEW AD = REQUEST
+                    if ad_type.upper() in ['SELL', 'SELL_AD']:
+                        request_type = 'SELL REQUEST'  # Offering to sell
+                        emoji = '🔴'
+                    else:
+                        request_type = 'BUY REQUEST'  # Looking to buy
+                        emoji = '🟢'
+                    
+                    requests.append({
+                        'type': 'request',
+                        'request_type': request_type,
+                        'source': source,
+                        'user': ad['advertiser'],
+                        'price': ad['price'] / peg,
+                        'vol_usd': vol,
+                        'timestamp': time.time()
+                    })
+                    print(f"   {emoji} {request_type}: {source} - {ad['advertiser'][:15]} posted {vol:,.0f} USDT @ {ad['price']/peg:.2f} ETB", file=sys.stderr)
     
-    # 3. Check for INVENTORY CHANGES in existing ads
+    # 3. Check for INVENTORY CHANGES (partial fills)
     for ad in current_ads:
         source = ad['source'].upper()
         if source not in sources_checked:
             continue
         
         sources_checked[source] += 1
-        
         key = f"{ad['source']}|||{ad['advertiser']}|||{ad['price']}"
         
         if key in prev_state:
-            prev_inventory = prev_state[key]
+            prev_data = prev_state[key]
+            # Handle both formats
+            if isinstance(prev_data, dict):
+                prev_inventory = prev_data.get('available', 0)
+                ad_type = prev_data.get('ad_type', ad.get('ad_type', 'SELL'))
+            else:
+                prev_inventory = prev_data
+                ad_type = ad.get('ad_type', 'SELL')
+            
             curr_inventory = ad['available']
             diff = abs(curr_inventory - prev_inventory)
             
-            # Log inventory changes (even small ones)
-            if diff > 0:
-                inventory_changes.append({
-                    'source': source,
-                    'user': ad['advertiser'][:15],
-                    'prev': prev_inventory,
-                    'curr': curr_inventory,
-                    'diff': diff,
-                    'direction': 'down' if curr_inventory < prev_inventory else 'up'
-                })
-            
-            # SELL: Inventory dropped (lowered threshold from 5 to 1 USDT)
+            # CORRECT AGGRESSOR LOGIC!
             if curr_inventory < prev_inventory and diff >= 1:
+                # Inventory dropped
+                if ad_type.upper() in ['SELL', 'SELL_AD']:
+                    # SELL ad inventory dropped = Aggressor BOUGHT (GREEN)
+                    aggressor_action = 'buy'
+                    emoji = '🟢'
+                    action_desc = 'BOUGHT'
+                else:
+                    # BUY ad inventory dropped = Aggressor SOLD (RED)
+                    aggressor_action = 'sell'
+                    emoji = '🔴'
+                    action_desc = 'SOLD'
+                
                 trades.append({
-                    'type': 'sell',
+                    'type': aggressor_action,
                     'source': source,
                     'user': ad['advertiser'],
                     'price': ad['price'] / peg,
                     'vol_usd': diff,
-                    'timestamp': time.time()
+                    'timestamp': time.time(),
+                    'reason': 'inventory_change'
                 })
-                print(f"   🔴 SELL: {source} - {ad['advertiser'][:15]} sold {diff:,.0f} USDT @ {ad['price']/peg:.2f} ETB", file=sys.stderr)
+                print(f"   {emoji} {action_desc}: {source} - {ad['advertiser'][:15]} {diff:,.0f} USDT @ {ad['price']/peg:.2f} ETB", file=sys.stderr)
             
-            # BUY: Inventory increased (lowered threshold from 5 to 1 USDT)
             elif curr_inventory > prev_inventory and diff >= 1:
-                trades.append({
-                    'type': 'buy',
-                    'source': source,
-                    'user': ad['advertiser'],
-                    'price': ad['price'] / peg,
-                    'vol_usd': diff,
-                    'timestamp': time.time()
-                })
-                print(f"   🟢 BUY: {source} - {ad['advertiser'][:15]} bought {diff:,.0f} USDT @ {ad['price']/peg:.2f} ETB", file=sys.stderr)
+                # Inventory increased = Merchant added funds (not a trade)
+                print(f"   ➕ FUNDED: {source} - {ad['advertiser'][:15]} added {diff:,.0f} USDT (not a trade)", file=sys.stderr)
     
-    # Debug: Show inventory changes detected
-    if inventory_changes:
-        print(f"\n   📊 Inventory Changes Detected: {len(inventory_changes)}", file=sys.stderr)
-        for i, change in enumerate(inventory_changes[:5]):  # Show first 5
-            print(f"      {i+1}. {change['source']} {change['user']}: {change['prev']} → {change['curr']} ({change['direction']} {change['diff']} USDT)", file=sys.stderr)
-        if len(inventory_changes) > 5:
-            print(f"      ... and {len(inventory_changes)-5} more changes", file=sys.stderr)
-    else:
-        print(f"\n   ⚠️  NO inventory changes detected between snapshots!", file=sys.stderr)
-        print(f"   This means: No ads appeared, disappeared, or had inventory changes", file=sys.stderr)
+    # Summary
+    print(f"\n   📊 SUMMARY:", file=sys.stderr)
+    print(f"   > Requests posted: {len(requests)}", file=sys.stderr)
+    print(f"   > Trades detected: {len(trades)} ({len([t for t in trades if t['type']=='buy'])} buys 🟢, {len([t for t in trades if t['type']=='sell'])} sells 🔴)", file=sys.stderr)
+    print(f"   > Checked: Binance={sources_checked.get('BINANCE', 0)}, MEXC={sources_checked.get('MEXC', 0)}, OKX={sources_checked.get('OKX', 0)}, Bybit={sources_checked.get('BYBIT', 0)}", file=sys.stderr)
     
-    print(f"\n   > Checked: Binance={sources_checked.get('BINANCE', 0)}, MEXC={sources_checked.get('MEXC', 0)}, OKX={sources_checked.get('OKX', 0)}", file=sys.stderr)
-    print(f"   > Detected {len(trades)} trades ({len([t for t in trades if t['type']=='buy'])} buys, {len([t for t in trades if t['type']=='sell'])} sells)", file=sys.stderr)
-    return trades
+    # Combine trades and requests
+    return trades + requests
 
 def load_recent_trades():
     if not os.path.exists(TRADES_FILE):
@@ -1732,7 +1780,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             
             <footer>
                 Official Rate: {official:.2f} ETB | Last Update: {timestamp} UTC<br>
-                v38.5 Delimiter Fix • No more crashes! • Handles all usernames correctly • 100% stable! ✨
+                v41.0 AGGRESSOR FIXED! • GREEN=Buy Demand • RED=Sell • +Bybit • +Requests • Correct colors! 🎯✅
             </footer>
         </div>
         
@@ -1958,56 +2006,74 @@ def generate_feed_html(trades, peg):
 
 # --- MAIN ---
 def main():
-    print("🔍 Running v38.5 (Delimiter Fix - No more crashes!)...", file=sys.stderr)
+    print("🔍 Running v41.0 (AGGRESSOR LOGIC FIXED + Bybit + Requests!)...", file=sys.stderr)
+    print("   📊 Strategy: 8 snapshots × 15s intervals = 105s coverage (58%!)", file=sys.stderr)
+    print("   ✅ Fixed: GREEN = buying demand, RED = selling pressure", file=sys.stderr)
+    print("   ✅ Added: Bybit + Request tracking!", file=sys.stderr)
     
-    # Snapshot 1
-    print("   > Snapshot 1/2...", file=sys.stderr)
-    snapshot_1 = capture_market_snapshot()
+    # Configuration - MAXIMUM snapshots within GitHub Actions time budget
+    NUM_SNAPSHOTS = 8  # Increased from 4 to 8!
+    WAIT_TIME = 15     # Reduced from 30s to 15s for faster monitoring
+    all_trades = []    # Collect trades from all comparisons
     
-    # CRITICAL FIX: Save snapshot_1 as baseline for comparison!
-    save_market_state(snapshot_1)
+    # First snapshot (baseline)
+    print(f"   > Snapshot 1/{NUM_SNAPSHOTS}...", file=sys.stderr)
+    prev_snapshot = capture_market_snapshot()
+    save_market_state(prev_snapshot)
     print("   > Saved baseline snapshot", file=sys.stderr)
     
-    # Wait
-    print(f"   > ⏳ Waiting {BURST_WAIT_TIME}s to catch trades...", file=sys.stderr)
-    time.sleep(BURST_WAIT_TIME)
+    # Get peg once
+    peg = fetch_usdt_peg() or 1.0
     
-    # Snapshot 2
-    print("   > Snapshot 2/2...", file=sys.stderr)
+    # Take additional snapshots and compare each to previous
+    for i in range(2, NUM_SNAPSHOTS + 1):
+        # Wait between snapshots
+        print(f"   > ⏳ Waiting {WAIT_TIME}s to catch trades...", file=sys.stderr)
+        time.sleep(WAIT_TIME)
+        
+        # Capture next snapshot
+        print(f"   > Snapshot {i}/{NUM_SNAPSHOTS}...", file=sys.stderr)
+        current_snapshot = capture_market_snapshot()
+        
+        # Detect trades between prev and current
+        trades_this_round = detect_real_trades(current_snapshot, peg)
+        if trades_this_round:
+            all_trades.extend(trades_this_round)
+            print(f"   ✅ Round {i-1}: Detected {len(trades_this_round)} trades", file=sys.stderr)
+        
+        # Update baseline for next comparison
+        save_market_state(current_snapshot)
+        prev_snapshot = current_snapshot
+    
+    # Final snapshot for website display
+    print("   > Final snapshot for display...", file=sys.stderr)
     with ThreadPoolExecutor(max_workers=10) as ex:
-        f_binance = ex.submit(fetch_binance_both_sides)  # ← FIXED: Fetch buy + sell!
+        f_binance = ex.submit(fetch_binance_both_sides)
         f_mexc = ex.submit(lambda: fetch_p2p_army_exchange("mexc", "SELL"))
         f_okx = ex.submit(lambda: fetch_p2p_army_exchange("okx", "SELL"))
         f_off = ex.submit(fetch_official_rate)
-        f_peg = ex.submit(fetch_usdt_peg)
         
         bin_ads = f_binance.result() or []
         mexc_ads = f_mexc.result() or []
         okx_ads = f_okx.result() or []
         official = f_off.result() or 0.0
-        peg = f_peg.result() or 1.0
     
     # Filter outliers
     bin_ads = remove_outliers(bin_ads, peg)
     mexc_ads = remove_outliers(mexc_ads, peg)
     okx_ads = remove_outliers(okx_ads, peg)
     
-    snapshot_2 = bin_ads + mexc_ads + okx_ads
+    final_snapshot = bin_ads + mexc_ads + okx_ads
     grouped_ads = {"BINANCE": bin_ads, "MEXC": mexc_ads, "OKX": okx_ads}
     
-    if snapshot_2:
-        # Detect trades
-        new_trades = detect_real_trades(snapshot_2, peg)
-        
-        # Save state
-        save_market_state(snapshot_2)
-        
-        # Save trades
-        if new_trades:
-            save_trades(new_trades)
-        
-        # Stats
-        all_prices = [x['price'] for x in snapshot_2]
+    # Save all detected trades
+    if all_trades:
+        save_trades(all_trades)
+        print(f"   💾 Saved {len(all_trades)} total trades", file=sys.stderr)
+    
+    # Generate stats and website
+    if final_snapshot:
+        all_prices = [x['price'] for x in final_snapshot]
         stats = analyze(all_prices, peg)
         
         if stats:
@@ -2016,16 +2082,17 @@ def main():
             update_website_html(
                 stats, official,
                 time.strftime("%Y-%m-%d %H:%M:%S"),
-                snapshot_2, grouped_ads, peg
+                final_snapshot, grouped_ads, peg
             )
-        else:
-            print("⚠️ Could not compute stats", file=sys.stderr)
     else:
         print("⚠️ No ads found", file=sys.stderr)
     
-    buys = len([t for t in (new_trades if 'new_trades' in locals() else []) if t.get('type') == 'buy'])
-    sells = len([t for t in (new_trades if 'new_trades' in locals() else []) if t.get('type') == 'sell'])
+    # Summary
+    buys = len([t for t in all_trades if t.get('type') == 'buy'])
+    sells = len([t for t in all_trades if t.get('type') == 'sell'])
+    print(f"\n🎯 TOTAL COVERAGE: {NUM_SNAPSHOTS} snapshots × {WAIT_TIME}s = {(NUM_SNAPSHOTS-1)*WAIT_TIME}s monitored")
     print(f"✅ Complete! Detected {buys} buys, {sells} sells this run.")
+
 
 if __name__ == "__main__":
     main()
