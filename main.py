@@ -968,7 +968,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
         <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="refresh" content="300">
-        <title>ETB Market v37 - Complete Edition</title>
+        <title>ETB Market v41 - Aggressor Fixed + Bybit + Requests</title>
         <style>
             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
             
@@ -1675,13 +1675,38 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                     </div>
                 </div>
                 
+                <!-- Buy/Sell Explanation -->
+                <div style="background:var(--card);padding:20px;border-radius:12px;margin-bottom:20px;border:1px solid var(--border);">
+                    <div style="font-size:16px;font-weight:700;margin-bottom:12px;color:var(--text)">📊 Understanding Market Colors</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;">
+                        <div style="background:linear-gradient(135deg,var(--green)11,var(--green)05);padding:15px;border-radius:8px;border:1px solid var(--green)44;">
+                            <div style="font-weight:600;color:var(--green);margin-bottom:5px;">🟢 GREEN = BUYING (Demand)</div>
+                            <div style="font-size:13px;color:var(--text-secondary);line-height:1.4;">
+                                When someone <b style="color:var(--text)">BUYS USDT</b> or posts a <b style="color:var(--text)">BUY REQUEST</b>. 
+                                Indicates demand for USDT (potential capital flight from ETB).
+                            </div>
+                        </div>
+                        <div style="background:linear-gradient(135deg,var(--red)11,var(--red)05);padding:15px;border-radius:8px;border:1px solid var(--red)44;">
+                            <div style="font-weight:600;color:var(--red);margin-bottom:5px;">🔴 RED = SELLING (Supply)</div>
+                            <div style="font-size:13px;color:var(--text-secondary);line-height:1.4;">
+                                When someone <b style="color:var(--text)">SELLS USDT</b> or posts a <b style="color:var(--text)">SELL REQUEST</b>. 
+                                Indicates supply of USDT (capital returning to ETB).
+                            </div>
+                        </div>
+                    </div>
+                    <div style="margin-top:12px;padding:10px;background:var(--bg);border-radius:6px;font-size:12px;color:var(--text-secondary);">
+                        <b style="color:var(--text);">Note:</b> Colors show AGGRESSOR actions (what takers do), not maker inventory changes. 
+                        This matches standard exchange behavior.
+                    </div>
+                </div>
+                
                 <div class="feed-panel">
                     <div class="feed-header">
                         <div class="feed-title">Market Activity</div>
                         <div style="color:var(--text-secondary);font-size:13px;margin-bottom:10px" id="feedStats">
                             <span style="color:var(--green)">🟢 {buys_count} Buys</span> • <span style="color:var(--red)">🔴 {sells_count} Sells</span>
                         </div>
-                        <div style="display:flex;gap:8px;margin-top:10px;">
+                        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
                             <button class="source-filter-btn active" data-source="all" onclick="filterBySource('all')" style="background:var(--accent);color:white;border:none;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
                                 All
                             </button>
@@ -1693,6 +1718,9 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                             </button>
                             <button class="source-filter-btn" data-source="OKX" onclick="filterBySource('OKX')" style="background:transparent;color:var(--text-secondary);border:1px solid var(--border);padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
                                 🟣 OKX
+                            </button>
+                            <button class="source-filter-btn" data-source="BYBIT" onclick="filterBySource('BYBIT')" style="background:transparent;color:var(--text-secondary);border:1px solid var(--border);padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">
+                                🟠 Bybit
                             </button>
                         </div>
                     </div>
@@ -1938,7 +1966,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
         f.write(html)
 
 def generate_feed_html(trades, peg):
-    """Server-side initial feed rendering"""
+    """Server-side initial feed rendering - handles trades AND requests"""
     if not trades:
         return '<div style="padding:20px;text-align:center;color:var(--text-secondary)">Waiting for market activity...</div>'
     
@@ -1946,14 +1974,62 @@ def generate_feed_html(trades, peg):
     valid_count = 0
     buy_count = 0
     sell_count = 0
+    request_count = 0
     
     for trade in sorted(trades, key=lambda x: x.get('timestamp', 0), reverse=True)[:50]:
-        # Skip trades without valid type
-        if trade.get('type') not in ['buy', 'sell']:
+        trade_type = trade.get('type')
+        
+        # Handle REQUESTS (new ads posted)
+        if trade_type == 'request':
+            request_count += 1
+            request_type = trade.get('request_type', 'REQUEST')
+            is_buy_request = 'BUY' in request_type
+            
+            ts = datetime.datetime.fromtimestamp(trade.get("timestamp", time.time()))
+            time_str = ts.strftime("%I:%M %p")
+            age_seconds = time.time() - trade.get("timestamp", time.time())
+            age_str = f"{int(age_seconds/60)}min ago" if age_seconds >= 60 else f"{int(age_seconds)}s ago"
+            
+            icon = "📝"  # Request icon
+            action_color = "var(--green)" if is_buy_request else "var(--red)"
+            
+            source = trade.get('source', 'Unknown')
+            if source == 'BINANCE':
+                emoji, color = '🟡', '#F3BA2F'
+            elif source == 'MEXC':
+                emoji, color = '🔵', '#2E55E6'
+            elif source == 'BYBIT':
+                emoji, color = '🟠', '#FF9500'  # Orange for Bybit
+            else:
+                emoji, color = '🟣', '#A855F7'  # Purple (OKX)
+            
+            html += f"""
+        <div class="feed-item request-item" data-source="{source}">
+            <div class="feed-icon" style="background:linear-gradient(135deg,{action_color}22,{action_color}11)">
+                {icon}
+            </div>
+            <div class="feed-content">
+                <div class="feed-meta">
+                    <span>{time_str}</span>
+                    <span>{age_str}</span>
+                </div>
+                <div class="feed-text">
+                    {emoji} <span class="feed-user">{trade.get('user', 'Unknown')[:15]}</span>
+                    <span style="color:{color};font-weight:600">({source})</span>
+                    <b style="color:{action_color}">{request_type}</b>
+                    <span class="feed-amount">{trade.get('vol_usd', 0):,.0f} USDT</span>
+                    @ <span class="feed-price">{trade.get('price', 0):.2f} ETB</span>
+                </div>
+            </div>
+        </div>
+        """
+            continue
+        
+        # Handle TRADES (buy/sell)
+        if trade_type not in ['buy', 'sell']:
             continue
         
         valid_count += 1
-        trade_type = trade['type']
         is_buy = trade_type == 'buy'
         
         if is_buy:
@@ -1976,11 +2052,13 @@ def generate_feed_html(trades, peg):
             emoji, color = '🟡', '#F3BA2F'  # Yellow
         elif source == 'MEXC':
             emoji, color = '🔵', '#2E55E6'  # Blue
+        elif source == 'BYBIT':
+            emoji, color = '🟠', '#FF9500'  # Orange
         else:
             emoji, color = '🟣', '#A855F7'  # Purple (OKX)
         
         html += f"""
-        <div class="feed-item">
+        <div class="feed-item" data-source="{source}">
             <div class="feed-icon {icon_class}">
                 {icon}
             </div>
@@ -2000,9 +2078,12 @@ def generate_feed_html(trades, peg):
         </div>
         """
     
-    print(f"   > Rendered {valid_count} feed items ({buy_count} buys, {sell_count} sells)", file=sys.stderr)
+    if not html:
+        return '<div style="padding:20px;text-align:center;color:var(--text-secondary)">No recent activity</div>'
     
+    print(f"   > Rendered {valid_count} trades + {request_count} requests", file=sys.stderr)
     return html
+
 
 # --- MAIN ---
 def main():
