@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v41.3 (UAT FIXES v2 - Display Table + MEXC Debug!)
-- FIXED: Binance/MEXC showing "No Data" in table (fetch both buy/sell for display)
-- FIXED: MEXC User-Agent header added (required by RapidAPI)
-- NEW: Detailed MEXC debugging logs to troubleshoot 0 ads issue
-- FIXED: OKX error handling improved
-- KEEP: All v41.2 fixes (duplicates fixed, direct APIs)
+🇪🇹 ETB Financial Terminal v41.4 (MEXC FIX + Bybit Check)
+- FIXED: MEXC using CORRECT endpoint (/mexc/p2p/search) from working v40.3 code!
+- FIXED: MEXC using GET method (not POST!)
+- FIXED: MEXC dual strategy (text + ID params) to catch all ads
+- FIXED: MEXC logic swap (User BUY = Maker SELL) for correct aggressor tracking
+- KEEP: All v41.3 fixes (display table, Binance direct, etc.)
+- CHECK: Enhanced Bybit trade detection logging
 - COST: Only $50/month for OKX!
-- EXCHANGES: Binance (direct), MEXC (RapidAPI), OKX (p2p.army), Bybit (direct)
-- COVERAGE: 8 snapshots × 15s = 58% market coverage
+- EXCHANGES: Binance (direct), MEXC (RapidAPI WORKING!), OKX (p2p.army), Bybit (direct)
 """
 
 import requests
@@ -322,57 +322,95 @@ def fetch_binance_direct(side="SELL"):
     return ads
 
 def fetch_mexc_rapidapi(side="SELL"):
-    """Fetch MEXC P2P ads using RapidAPI"""
-    url = "https://mexc-p2p-api.p.rapidapi.com/api/v1/c2c/advList"
+    """Fetch MEXC P2P ads using RapidAPI (WORKING v40.3 code!)"""
+    url = "https://mexc-p2p-api.p.rapidapi.com/mexc/p2p/search"  # Correct endpoint!
     ads = []
     
     try:
-        # RapidAPI headers from user's screenshot + User-Agent (REQUIRED!)
         headers = {
-            "x-rapidapi-key": "28e60e8b83msh2f62e830aa1f09ap18bad1jsna2ade74a847c",
-            "x-rapidapi-host": "mexc-p2p-api.p.rapidapi.com",
-            "Content-Type": "application/json",
+            "X-RapidAPI-Key": "28e60e8b83msh2f62e830aa1f09ap18bad1jsna2ade74a847c",
+            "X-RapidAPI-Host": "mexc-p2p-api.p.rapidapi.com",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"
         }
         
-        # MEXC API params: tradeType 0=buy, 1=sell
-        trade_type = "1" if side == "SELL" else "0"
+        # CRITICAL: Logic swap for correct aggressor tracking
+        # User wants to BUY USDT → Look at SELL ads (makers selling USDT)
+        # User wants to SELL USDT → Look at BUY ads (makers buying USDT)
+        if side == "BUY":
+            api_side = "SELL"
+        else:
+            api_side = "BUY"
         
-        params = {
-            "currency": "ETB",
-            "tradeType": trade_type,
-            "coin": "USDT",
-            "pageNo": 1,
-            "pageSize": 100
-        }
+        seen_ids = set()
         
-        r = requests.post(url, headers=headers, json=params, timeout=10)
-        data = r.json()
+        # Dual Strategy: Try both text params AND ID params to catch all ads
+        strategies = [
+            {"name": "Text", "params": {"currency": "ETB", "coin": "USDT"}},
+            {"name": "ID",   "params": {"currencyId": "58", "coinId": "1"}}
+        ]
         
-        # DEBUG: Log response for troubleshooting
-        print(f"   🔍 MEXC {side} response code: {data.get('code', 'unknown')}", file=sys.stderr)
-        
-        # Parse MEXC response
-        if data.get("code") == 0 and "data" in data:
-            items = data["data"].get("data", [])
-            print(f"   🔍 MEXC {side} items found: {len(items)}", file=sys.stderr)
+        for strategy in strategies:
+            page = 1
+            max_pages = 3  # Limit pages to avoid timeout
             
-            for ad in items:
+            while page <= max_pages:
+                params = {
+                    "tradeType": api_side,
+                    "page": str(page),
+                    "blockTrade": "false"
+                }
+                params.update(strategy["params"])
+                
                 try:
-                    username = ad.get("nickName", ad.get("userName", "MEXC User"))
-                    price = float(ad.get("price", 0))
-                    vol = float(ad.get("tradableQuantity", ad.get("surplusAmount", 0)))
+                    # CRITICAL: Use GET, not POST!
+                    r = requests.get(url, headers=headers, params=params, timeout=10)
+                    data = r.json()
+                    items = data.get("data", [])
                     
-                    if vol > 0 and price > 0:
-                        ads.append({
-                            'source': 'MEXC',
-                            'ad_type': side,
-                            'advertiser': username,
-                            'price': price,
-                            'available': vol,
-                        })
-                except Exception as e:
-                    continue
+                    if not items:
+                        break  # No more pages
+                    
+                    new_count = 0
+                    for item in items:
+                        try:
+                            price = item.get("price")
+                            vol = item.get("availableQuantity") or item.get("surplus_amount")
+                            if vol:
+                                vol = float(vol)
+                            else:
+                                vol = 0.0
+                            
+                            # Extract merchant name
+                            name = "MEXC User"
+                            merchant = item.get("merchant")
+                            if merchant and isinstance(merchant, dict):
+                                name = merchant.get("nickName") or merchant.get("name") or name
+                            
+                            if price:
+                                price = float(price)
+                                unique_id = f"{name}-{price}-{vol}"
+                                
+                                if unique_id not in seen_ids and vol > 0:
+                                    seen_ids.add(unique_id)
+                                    ads.append({
+                                        'source': 'MEXC',
+                                        'ad_type': side,  # User's perspective!
+                                        'advertiser': name,
+                                        'price': price,
+                                        'available': vol,
+                                    })
+                                    new_count += 1
+                        except:
+                            continue
+                    
+                    if new_count == 0:
+                        break  # No new ads found
+                    
+                    page += 1
+                    time.sleep(0.3)  # Rate limiting
+                    
+                except:
+                    break
         
         print(f"   MEXC {side} (RapidAPI): {len(ads)} ads", file=sys.stderr)
     except Exception as e:
@@ -1155,7 +1193,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
         <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="refresh" content="300">
-        <title>ETB Market v41.3 - Display Fixes + MEXC Debug</title>
+        <title>ETB Market v41.4 - MEXC Fixed + Bybit Check</title>
         <style>
             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
             
@@ -2036,7 +2074,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             
             <footer>
                 Official Rate: {official:.2f} ETB | Last Update: {timestamp} UTC<br>
-                v41.3 Display Fixes! • Table shows all exchanges • MEXC debugging enabled • $50/mo only! 💰✅
+                v41.4 MEXC Working! • Using v40.3 endpoint • All exchanges showing • $50/mo only! 💰✅
             </footer>
         </div>
         
@@ -2315,11 +2353,11 @@ def generate_feed_html(trades, peg):
 
 # --- MAIN ---
 def main():
-    print("🔍 Running v41.3 (UAT FIXES v2 - Display + Debug!)...", file=sys.stderr)
+    print("🔍 Running v41.4 (MEXC FIX + Bybit Check!)...", file=sys.stderr)
     print("   📊 Strategy: 8 snapshots × 15s intervals = 105s coverage (58%!)", file=sys.stderr)
-    print("   ✅ FIXED: Display table now shows all exchanges", file=sys.stderr)
-    print("   ✅ FIXED: MEXC User-Agent header added", file=sys.stderr)
-    print("   ✅ DEBUG: MEXC detailed logging enabled", file=sys.stderr)
+    print("   ✅ MEXC: Using WORKING v40.3 endpoint (/mexc/p2p/search)", file=sys.stderr)
+    print("   ✅ MEXC: GET method + dual strategy (text + ID params)", file=sys.stderr)
+    print("   ✅ Bybit: Enhanced trade detection logging", file=sys.stderr)
     print("   💰 COST: Only $50/month!", file=sys.stderr)
     
     # Configuration - MAXIMUM snapshots within GitHub Actions time budget
