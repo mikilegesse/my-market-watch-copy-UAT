@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v41.4 (MEXC FIX + Bybit Check)
-- FIXED: MEXC using CORRECT endpoint (/mexc/p2p/search) from working v40.3 code!
-- FIXED: MEXC using GET method (not POST!)
-- FIXED: MEXC dual strategy (text + ID params) to catch all ads
-- FIXED: MEXC logic swap (User BUY = Maker SELL) for correct aggressor tracking
-- KEEP: All v41.3 fixes (display table, Binance direct, etc.)
-- CHECK: Enhanced Bybit trade detection logging
+🇪🇹 ETB Financial Terminal v41.5 (Display Fixes!)
+- FIXED: REQUEST trades now show as "BUY REQUEST" / "SELL REQUEST" (not BOUGHT/SOLD)
+- FIXED: Added detailed logging for MEXC table display issue
+- FIXED: Filter now includes 'request' type trades in feed
+- KEEP: All v41.4 fixes (MEXC working endpoint, etc.)
 - COST: Only $50/month for OKX!
-- EXCHANGES: Binance (direct), MEXC (RapidAPI WORKING!), OKX (p2p.army), Bybit (direct)
+- EXCHANGES: Binance (direct), MEXC (RapidAPI), OKX (p2p.army), Bybit (direct)
 """
 
 import requests
@@ -1193,7 +1191,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
         <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="refresh" content="300">
-        <title>ETB Market v41.4 - MEXC Fixed + Bybit Check</title>
+        <title>ETB Market v41.5 - Display Fixes</title>
         <style>
             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
             
@@ -2074,7 +2072,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             
             <footer>
                 Official Rate: {official:.2f} ETB | Last Update: {timestamp} UTC<br>
-                v41.4 MEXC Working! • Using v40.3 endpoint • All exchanges showing • $50/mo only! 💰✅
+                v41.5 Display Fixed! • REQUESTS show correctly • MEXC table debugging • $50/mo only! 💰✅
             </footer>
         </div>
         
@@ -2148,7 +2146,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                 
                 let filtered = allTrades.filter(t => {{
                     return t.timestamp > cutoff && 
-                           (t.type === 'buy' || t.type === 'sell');
+                           (t.type === 'buy' || t.type === 'sell' || t.type === 'request');
                 }});
                 
                 if (currentSource !== 'all') {{
@@ -2180,10 +2178,23 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                     const ageMin = Math.floor((Date.now() / 1000 - trade.timestamp) / 60);
                     const age = ageMin < 60 ? ageMin + 'm ago' : Math.floor(ageMin/60) + 'h ago';
                     
-                    const isBuy = trade.type === 'buy';
-                    const icon = isBuy ? '↗' : '↘';
-                    const action = isBuy ? 'BOUGHT' : 'SOLD';
-                    const color = isBuy ? 'var(--green)' : 'var(--red)';
+                    // Handle both regular trades and requests
+                    let icon, action, color;
+                    
+                    if (trade.type === 'request') {{
+                        // REQUEST: Show as "posted" instead of BOUGHT/SOLD
+                        const requestType = trade.request_type || 'REQUEST';
+                        const isBuyRequest = requestType.includes('BUY');
+                        icon = isBuyRequest ? '➕' : '➖';
+                        action = requestType;  // "BUY REQUEST" or "SELL REQUEST"
+                        color = isBuyRequest ? 'var(--green)' : 'var(--red)';
+                    }} else {{
+                        // Regular trade
+                        const isBuy = trade.type === 'buy';
+                        icon = isBuy ? '↗' : '↘';
+                        action = isBuy ? 'BOUGHT' : 'SOLD';
+                        color = isBuy ? 'var(--green)' : 'var(--red)';
+                    }}
                     
                     let sourceColor, sourceEmoji;
                     if (trade.source === 'BINANCE') {{
@@ -2192,6 +2203,9 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                     }} else if (trade.source === 'MEXC') {{
                         sourceColor = '#2E55E6';  // Blue
                         sourceEmoji = '🔵';
+                    }} else if (trade.source === 'BYBIT') {{
+                        sourceColor = '#FF6B00';  // Orange
+                        sourceEmoji = '🟠';
                     }} else {{
                         sourceColor = '#A855F7';  // Purple (OKX)
                         sourceEmoji = '🟣';
@@ -2353,11 +2367,10 @@ def generate_feed_html(trades, peg):
 
 # --- MAIN ---
 def main():
-    print("🔍 Running v41.4 (MEXC FIX + Bybit Check!)...", file=sys.stderr)
+    print("🔍 Running v41.5 (Display Fixes!)...", file=sys.stderr)
     print("   📊 Strategy: 8 snapshots × 15s intervals = 105s coverage (58%!)", file=sys.stderr)
-    print("   ✅ MEXC: Using WORKING v40.3 endpoint (/mexc/p2p/search)", file=sys.stderr)
-    print("   ✅ MEXC: GET method + dual strategy (text + ID params)", file=sys.stderr)
-    print("   ✅ Bybit: Enhanced trade detection logging", file=sys.stderr)
+    print("   ✅ FIXED: REQUEST trades show correctly (not as BOUGHT/SOLD)", file=sys.stderr)
+    print("   ✅ FIXED: Enhanced MEXC table debugging", file=sys.stderr)
     print("   💰 COST: Only $50/month!", file=sys.stderr)
     
     # Configuration - MAXIMUM snapshots within GitHub Actions time budget
@@ -2409,11 +2422,25 @@ def main():
         bybit_ads = f_bybit.result() or []
         official = f_off.result() or 0.0
     
+    # Debug: Log ad counts BEFORE filtering
+    print(f"   🔍 Final snapshot (before filtering):", file=sys.stderr)
+    print(f"      BINANCE: {len(bin_ads)} ads", file=sys.stderr)
+    print(f"      MEXC: {len(mexc_ads)} ads", file=sys.stderr)
+    print(f"      OKX: {len(okx_ads)} ads", file=sys.stderr)
+    print(f"      BYBIT: {len(bybit_ads)} ads", file=sys.stderr)
+    
     # Filter outliers
     bin_ads = remove_outliers(bin_ads, peg)
     mexc_ads = remove_outliers(mexc_ads, peg)
     okx_ads = remove_outliers(okx_ads, peg)
     bybit_ads = remove_outliers(bybit_ads, peg)
+    
+    # Debug: Log ad counts AFTER filtering
+    print(f"   🔍 Final snapshot (after filtering):", file=sys.stderr)
+    print(f"      BINANCE: {len(bin_ads)} ads", file=sys.stderr)
+    print(f"      MEXC: {len(mexc_ads)} ads", file=sys.stderr)
+    print(f"      OKX: {len(okx_ads)} ads", file=sys.stderr)
+    print(f"      BYBIT: {len(bybit_ads)} ads", file=sys.stderr)
     
     final_snapshot = bin_ads + mexc_ads + okx_ads + bybit_ads
     grouped_ads = {"BINANCE": bin_ads, "MEXC": mexc_ads, "OKX": okx_ads, "BYBIT": bybit_ads}
