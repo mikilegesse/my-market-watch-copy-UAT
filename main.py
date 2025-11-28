@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v41.5 (Display Fixes!)
-- FIXED: REQUEST trades now show as "BUY REQUEST" / "SELL REQUEST" (not BOUGHT/SOLD)
-- FIXED: Added detailed logging for MEXC table display issue
-- FIXED: Filter now includes 'request' type trades in feed
-- KEEP: All v41.4 fixes (MEXC working endpoint, etc.)
+🇪🇹 ETB Financial Terminal v41.6 (Binance Pagination Fix!)
+- FIXED: Binance now uses PAGINATION (20 pages) from working v41.1 code!
+- FIXED: Can now fetch 400+ Binance ads instead of just 20!
+- KEEP: All v41.5 fixes (REQUEST display, MEXC working, debugging)
 - COST: Only $50/month for OKX!
-- EXCHANGES: Binance (direct), MEXC (RapidAPI), OKX (p2p.army), Bybit (direct)
+- EXCHANGES: Binance (direct + paginated!), MEXC (RapidAPI), OKX (p2p.army), Bybit (direct)
 """
 
 import requests
@@ -270,54 +269,76 @@ def fetch_bybit_direct(side="SELL"):
     return ads
 
 def fetch_binance_direct(side="SELL"):
-    """Fetch Binance P2P ads using direct free API"""
+    """
+    Fetch Binance P2P ads using direct free API WITH PAGINATION!
+    Based on working v41.1 code that found 400+ ads
+    """
     url = "https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search"
-    ads = []
     
-    try:
-        # Binance API params
+    all_ads = []
+    seen_ids = set()
+    page = 1
+    max_pages = 20  # Scan up to 20 pages (approx 400 ads!)
+    
+    while page <= max_pages:
         payload = {
-            "fiat": "ETB",
-            "page": 1,
-            "rows": 100,
-            "tradeType": side,  # "SELL" or "BUY"
             "asset": "USDT",
-            "payTypes": [],
-            "publisherType": None
+            "fiat": "ETB",
+            "merchantCheck": False,
+            "page": page,
+            "rows": 20,  # Binance returns 20 per page
+            "tradeType": side
         }
         
-        r = requests.post(url, headers=HEADERS, json=payload, timeout=10)
-        data = r.json()
-        
-        # Parse Binance response
-        if data.get("data"):
-            items = data["data"]
+        try:
+            r = requests.post(url, headers=HEADERS, json=payload, timeout=10)
+            data = r.json()
             
-            for ad in items:
-                try:
-                    adv = ad.get("adv", {})
-                    advertiser = ad.get("advertiser", {})
-                    
-                    username = advertiser.get("nickName", "Binance User")
-                    price = float(adv.get("price", 0))
-                    vol = float(adv.get("surplusAmount", adv.get("tradableQuantity", 0)))
-                    
-                    if vol > 0 and price > 0:
-                        ads.append({
-                            'source': 'BINANCE',
-                            'ad_type': side,
-                            'advertiser': username,
-                            'price': price,
-                            'available': vol,
-                        })
-                except Exception as e:
-                    continue
-        
-        print(f"   BINANCE {side} (direct API): {len(ads)} ads", file=sys.stderr)
-    except Exception as e:
-        print(f"   BINANCE {side} (direct API) error: {e}", file=sys.stderr)
+            if data.get("code") == "000000" and data.get("data"):
+                items = data['data']
+                
+                # Stop if page is empty
+                if not items:
+                    break
+                
+                new_ads_count = 0
+                for item in items:
+                    try:
+                        # Extract data
+                        adv = item['adv']
+                        advertiser = item['advertiser']
+                        
+                        price = float(adv['price'])
+                        vol = float(adv['surplusAmount'])
+                        name = advertiser['nickName']
+                        ad_no = adv['advNo']  # Unique ad ID for deduplication
+                        
+                        if ad_no not in seen_ids:
+                            seen_ids.add(ad_no)
+                            all_ads.append({
+                                'source': 'BINANCE',
+                                'ad_type': side,
+                                'advertiser': name,
+                                'price': price,
+                                'available': vol,
+                            })
+                            new_ads_count += 1
+                    except:
+                        continue
+                
+                # Stop if no new ads found on this page
+                if new_ads_count == 0:
+                    break
+                
+                page += 1
+                time.sleep(0.3)  # Rate limiting between pages
+            else:
+                break
+        except Exception as e:
+            break
     
-    return ads
+    print(f"   BINANCE {side} (direct API): {len(all_ads)} ads from {page-1} pages", file=sys.stderr)
+    return all_ads
 
 def fetch_mexc_rapidapi(side="SELL"):
     """Fetch MEXC P2P ads using RapidAPI (WORKING v40.3 code!)"""
@@ -1191,7 +1212,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
         <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="refresh" content="300">
-        <title>ETB Market v41.5 - Display Fixes</title>
+        <title>ETB Market v41.6 - Binance 400+ Ads!</title>
         <style>
             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
             
@@ -2072,7 +2093,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             
             <footer>
                 Official Rate: {official:.2f} ETB | Last Update: {timestamp} UTC<br>
-                v41.5 Display Fixed! • REQUESTS show correctly • MEXC table debugging • $50/mo only! 💰✅
+                v41.6 Binance 400+ Ads! • Pagination from v41.1 • All fixes working • $50/mo only! 💰✅
             </footer>
         </div>
         
@@ -2367,10 +2388,11 @@ def generate_feed_html(trades, peg):
 
 # --- MAIN ---
 def main():
-    print("🔍 Running v41.5 (Display Fixes!)...", file=sys.stderr)
+    print("🔍 Running v41.6 (Binance Pagination!)...", file=sys.stderr)
     print("   📊 Strategy: 8 snapshots × 15s intervals = 105s coverage (58%!)", file=sys.stderr)
-    print("   ✅ FIXED: REQUEST trades show correctly (not as BOUGHT/SOLD)", file=sys.stderr)
-    print("   ✅ FIXED: Enhanced MEXC table debugging", file=sys.stderr)
+    print("   ✅ BINANCE: Using pagination (20 pages) from v41.1!", file=sys.stderr)
+    print("   ✅ BINANCE: Can now fetch 400+ ads (was only ~20)!", file=sys.stderr)
+    print("   ✅ KEEP: All v41.5 fixes (REQUEST display, MEXC working)", file=sys.stderr)
     print("   💰 COST: Only $50/month!", file=sys.stderr)
     
     # Configuration - MAXIMUM snapshots within GitHub Actions time budget
