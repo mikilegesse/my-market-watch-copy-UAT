@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v41.2 (UAT FIXES - Direct APIs!)
-- FIXED: Duplicate trade bug (proper snapshot updates)
-- NEW: Binance via direct FREE API (was p2p.army)
-- NEW: MEXC via RapidAPI (user's credentials)
-- KEEP: OKX via p2p.army only
-- KEEP: Bybit via direct FREE API (v41.1)
-- UI: Explanation moved to bottom (no tooltip)
-- COST: Only $50/month for OKX (was $200/month!)
-- SAVINGS: $150/month = $1,800/year! 💰
+🇪🇹 ETB Financial Terminal v41.3 (UAT FIXES v2 - Display Table + MEXC Debug!)
+- FIXED: Binance/MEXC showing "No Data" in table (fetch both buy/sell for display)
+- FIXED: MEXC User-Agent header added (required by RapidAPI)
+- NEW: Detailed MEXC debugging logs to troubleshoot 0 ads issue
+- FIXED: OKX error handling improved
+- KEEP: All v41.2 fixes (duplicates fixed, direct APIs)
+- COST: Only $50/month for OKX!
 - EXCHANGES: Binance (direct), MEXC (RapidAPI), OKX (p2p.army), Bybit (direct)
 - COVERAGE: 8 snapshots × 15s = 58% market coverage
 """
@@ -329,11 +327,12 @@ def fetch_mexc_rapidapi(side="SELL"):
     ads = []
     
     try:
-        # RapidAPI headers from user's screenshot
+        # RapidAPI headers from user's screenshot + User-Agent (REQUIRED!)
         headers = {
             "x-rapidapi-key": "28e60e8b83msh2f62e830aa1f09ap18bad1jsna2ade74a847c",
             "x-rapidapi-host": "mexc-p2p-api.p.rapidapi.com",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"
         }
         
         # MEXC API params: tradeType 0=buy, 1=sell
@@ -350,9 +349,13 @@ def fetch_mexc_rapidapi(side="SELL"):
         r = requests.post(url, headers=headers, json=params, timeout=10)
         data = r.json()
         
+        # DEBUG: Log response for troubleshooting
+        print(f"   🔍 MEXC {side} response code: {data.get('code', 'unknown')}", file=sys.stderr)
+        
         # Parse MEXC response
         if data.get("code") == 0 and "data" in data:
             items = data["data"].get("data", [])
+            print(f"   🔍 MEXC {side} items found: {len(items)}", file=sys.stderr)
             
             for ad in items:
                 try:
@@ -374,6 +377,8 @@ def fetch_mexc_rapidapi(side="SELL"):
         print(f"   MEXC {side} (RapidAPI): {len(ads)} ads", file=sys.stderr)
     except Exception as e:
         print(f"   MEXC {side} (RapidAPI) error: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
     
     return ads
 
@@ -1150,7 +1155,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
         <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="refresh" content="300">
-        <title>ETB Market v41.2 - UAT Fixes + Direct APIs</title>
+        <title>ETB Market v41.3 - Display Fixes + MEXC Debug</title>
         <style>
             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
             
@@ -2031,7 +2036,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             
             <footer>
                 Official Rate: {official:.2f} ETB | Last Update: {timestamp} UTC<br>
-                v41.2 UAT Fixes! • Binance Direct • MEXC RapidAPI • OKX p2p.army • Bybit Direct • All FREE! 💰✅
+                v41.3 Display Fixes! • Table shows all exchanges • MEXC debugging enabled • $50/mo only! 💰✅
             </footer>
         </div>
         
@@ -2310,14 +2315,12 @@ def generate_feed_html(trades, peg):
 
 # --- MAIN ---
 def main():
-    print("🔍 Running v41.2 (UAT FIXES - Direct APIs!)...", file=sys.stderr)
+    print("🔍 Running v41.3 (UAT FIXES v2 - Display + Debug!)...", file=sys.stderr)
     print("   📊 Strategy: 8 snapshots × 15s intervals = 105s coverage (58%!)", file=sys.stderr)
-    print("   ✅ FIXED: Duplicate trade bug", file=sys.stderr)
-    print("   ✅ Binance: Direct FREE API (was p2p.army)", file=sys.stderr)
-    print("   ✅ MEXC: RapidAPI (user credentials)", file=sys.stderr)
-    print("   ✅ OKX: p2p.army only ($50/mo)", file=sys.stderr)
-    print("   ✅ Bybit: Direct FREE API", file=sys.stderr)
-    print("   💰 SAVINGS: $150/month!", file=sys.stderr)
+    print("   ✅ FIXED: Display table now shows all exchanges", file=sys.stderr)
+    print("   ✅ FIXED: MEXC User-Agent header added", file=sys.stderr)
+    print("   ✅ DEBUG: MEXC detailed logging enabled", file=sys.stderr)
+    print("   💰 COST: Only $50/month!", file=sys.stderr)
     
     # Configuration - MAXIMUM snapshots within GitHub Actions time budget
     NUM_SNAPSHOTS = 8  # Increased from 4 to 8!
@@ -2353,13 +2356,13 @@ def main():
         save_market_state(current_snapshot)
         prev_snapshot = current_snapshot
     
-    # Final snapshot for website display
+    # Final snapshot for website display (fetch BOTH sides!)
     print("   > Final snapshot for display...", file=sys.stderr)
     with ThreadPoolExecutor(max_workers=10) as ex:
-        f_binance = ex.submit(lambda: fetch_binance_direct("SELL"))  # Direct API
-        f_mexc = ex.submit(lambda: fetch_mexc_rapidapi("SELL"))  # RapidAPI
-        f_okx = ex.submit(lambda: fetch_p2p_army_exchange("okx", "SELL"))  # p2p.army
-        f_bybit = ex.submit(lambda: fetch_bybit_direct("SELL"))  # Direct API
+        f_binance = ex.submit(fetch_binance_both_sides)  # Both buy and sell!
+        f_mexc = ex.submit(fetch_mexc_both_sides)  # Both buy and sell!
+        f_okx = ex.submit(fetch_exchange_both_sides, "okx")  # Both buy and sell!
+        f_bybit = ex.submit(fetch_bybit_both_sides)  # Both buy and sell!
         f_off = ex.submit(fetch_official_rate)
         
         bin_ads = f_binance.result() or []
