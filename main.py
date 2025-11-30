@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v41.7 (CRITICAL BUG FIXES!)
-- FIXED: Deleted duplicate fetch_binance_both_sides function that was breaking everything!
-- FIXED: Added deduplication across BUY/SELL in all *_both_sides functions
-- FIXED: MEXC should now appear in table (duplicate function was causing issues)
-- FIXED: Binance duplicates eliminated with proper deduplication
-- KEEP: All v41.6 features (pagination for 400+ ads, etc.)
+🇪🇹 ETB Financial Terminal v41.8 (Bybit Duplicates + MEXC Pagination!)
+- FIXED: Bybit duplicate trades (deduplication in save_trades)
+- FIXED: REQUEST vs BOUGHT/SOLD clearly differentiated
+- FIXED: REQUESTs excluded from volume calculations
+- FIXED: MEXC pagination increased (3 → 10 pages for more ads)
+- NEW: Chart zoom controls (+ / − / reset)
+- KEEP: All v41.7 fixes (Binance pagination, no duplicate functions)
 - COST: Only $50/month for OKX!
-- EXCHANGES: Binance (direct + paginated!), MEXC (RapidAPI), OKX (p2p.army), Bybit (direct)
 """
 
 import requests
@@ -372,7 +372,7 @@ def fetch_mexc_rapidapi(side="SELL"):
         
         for strategy in strategies:
             page = 1
-            max_pages = 3  # Limit pages to avoid timeout
+            max_pages = 10  # Increased from 3 to 10 to get more MEXC ads!
             
             while page <= max_pages:
                 params = {
@@ -777,8 +777,30 @@ def load_recent_trades():
         return []
 
 def save_trades(new_trades):
+    """Save trades with DEDUPLICATION to prevent duplicates like Bybit issue"""
     recent = load_recent_trades()
-    all_trades = recent + new_trades
+    
+    # Create set of existing trade keys for deduplication
+    existing_keys = set()
+    for t in recent:
+        # Key: source + user + price + rounded timestamp (within 60 seconds)
+        ts_bucket = int(t.get("timestamp", 0) / 60)  # Group by minute
+        key = f"{t.get('source', '')}_{t.get('user', '')}_{t.get('price', 0):.2f}_{ts_bucket}_{t.get('type', '')}"
+        existing_keys.add(key)
+    
+    # Filter out duplicate new trades
+    unique_new = []
+    for t in new_trades:
+        ts_bucket = int(t.get("timestamp", 0) / 60)
+        key = f"{t.get('source', '')}_{t.get('user', '')}_{t.get('price', 0):.2f}_{ts_bucket}_{t.get('type', '')}"
+        if key not in existing_keys:
+            existing_keys.add(key)
+            unique_new.append(t)
+    
+    if len(new_trades) != len(unique_new):
+        print(f"   > Deduplication: {len(new_trades)} → {len(unique_new)} trades (removed {len(new_trades) - len(unique_new)} duplicates)", file=sys.stderr)
+    
+    all_trades = recent + unique_new
     
     cutoff = time.time() - (TRADE_RETENTION_MINUTES * 60)
     filtered = [t for t in all_trades if t.get("timestamp", 0) > cutoff]
@@ -787,6 +809,7 @@ def save_trades(new_trades):
         json.dump(filtered, f)
     
     print(f"   > Saved {len(filtered)} trades to history (last 24h)", file=sys.stderr)
+
 
 # --- ANALYTICS ---
 def analyze(prices, peg):
@@ -1029,22 +1052,21 @@ def calculate_trade_stats(trades):
     return stats
 
 def calculate_volume_by_exchange(trades):
-    """Calculate buy/sell volume by exchange for last 24h"""
+    """Calculate buy/sell volume by exchange for last 24h - EXCLUDES REQUESTS"""
     volumes = {}
     
     # Debug: print sample trades
     print(f"\n🔍 DEBUG: calculate_volume_by_exchange received {len(trades)} trades", file=sys.stderr)
-    if len(trades) > 0:
-        print(f"   Sample trade: {trades[0]}", file=sys.stderr)
     
-    for trade in trades:
+    # Count requests vs actual trades
+    actual_trades = [t for t in trades if t.get('type') in ['buy', 'sell']]
+    requests = [t for t in trades if t.get('type') == 'request']
+    print(f"   Actual trades: {len(actual_trades)}, Requests (excluded): {len(requests)}", file=sys.stderr)
+    
+    for trade in actual_trades:  # Only process actual trades, NOT requests!
         source = trade.get('source', 'Unknown')
         vol = trade.get('vol_usd', 0)
         trade_type = trade.get('type', '')
-        
-        # Debug: print first few trades
-        if len(volumes) < 3:
-            print(f"   Processing: source={source}, type={trade_type}, vol={vol}", file=sys.stderr)
         
         if source not in volumes:
             volumes[source] = {'buy': 0, 'sell': 0, 'total': 0}
@@ -1175,7 +1197,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
     else:
         max_volume = max([v['total'] for v in volume_by_exchange.values()])
         
-        for source in ['BINANCE', 'MEXC', 'OKX']:
+        for source in ['BINANCE', 'MEXC', 'OKX', 'BYBIT']:  # Added BYBIT!
             # Get data or default to 0
             data = volume_by_exchange.get(source, {'buy': 0, 'sell': 0, 'total': 0})
             buy_pct = (data['buy'] / max_volume * 100) if max_volume > 0 else 0
@@ -1188,8 +1210,14 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                 sell_pct = 2
             
             # Source emoji and color
-            emoji = '🟡' if source == 'BINANCE' else ('🔵' if source == 'MEXC' else '🟣')
-            color = '#F3BA2F' if source == 'BINANCE' else ('#2E55E6' if source == 'MEXC' else '#A855F7')
+            if source == 'BINANCE':
+                emoji, color = '🟡', '#F3BA2F'
+            elif source == 'MEXC':
+                emoji, color = '🔵', '#2E55E6'
+            elif source == 'OKX':
+                emoji, color = '🟣', '#A855F7'
+            else:  # BYBIT
+                emoji, color = '🟠', '#FF6B00'
             
             volume_chart_html += f"""
             <div class="volume-row">
@@ -1243,7 +1271,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
         <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="refresh" content="300">
-        <title>ETB Market v41.7 - Bug Fixes</title>
+        <title>ETB Market v41.8 - No Duplicates + Zoom</title>
         <style>
             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
             
@@ -1479,10 +1507,46 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                 position: relative;
             }}
             
+            .chart-zoom-controls {{
+                position: absolute;
+                top: 30px;
+                right: 30px;
+                display: flex;
+                gap: 8px;
+                z-index: 10;
+            }}
+            
+            .zoom-btn {{
+                width: 36px;
+                height: 36px;
+                border-radius: 8px;
+                border: 1px solid var(--border);
+                background: var(--card);
+                color: var(--text);
+                cursor: pointer;
+                font-size: 18px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s;
+            }}
+            
+            .zoom-btn:hover {{
+                background: var(--border);
+            }}
+            
+            .chart-zoom-container {{
+                overflow: auto;
+                max-height: 500px;
+                border-radius: 12px;
+            }}
+            
             .chart-card img {{
                 width: 100%;
+                min-width: 100%;
                 border-radius: 12px;
                 display: block;
+                transition: transform 0.3s ease;
             }}
             
             .table-card {{
@@ -1927,7 +1991,14 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                     </div>
                     
                     <div class="chart-card">
-                        <img src="{GRAPH_FILENAME}?v={cache_buster}" id="chartImg" alt="Market Chart" title="Price Distribution and 24h Trend">
+                        <div class="chart-zoom-controls">
+                            <button class="zoom-btn" onclick="zoomChart(-0.2)" title="Zoom Out">−</button>
+                            <button class="zoom-btn" onclick="zoomChart(0)" title="Reset Zoom">⟲</button>
+                            <button class="zoom-btn" onclick="zoomChart(0.2)" title="Zoom In">+</button>
+                        </div>
+                        <div class="chart-zoom-container" id="chartContainer">
+                            <img src="{GRAPH_FILENAME}?v={cache_buster}" id="chartImg" alt="Market Chart" title="Price Distribution and 24h Trend">
+                        </div>
                     </div>
                     
                     <div class="table-card">
@@ -2124,7 +2195,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             
             <footer>
                 Official Rate: {official:.2f} ETB | Last Update: {timestamp} UTC<br>
-                v41.7 CRITICAL FIXES! • Deleted duplicate function • Deduplication working • MEXC + Binance fixed! 💰✅
+                v41.8 No Duplicates! • Bybit fixed • MEXC 10 pages • Chart zoom • REQUESTs excluded! 💰✅
             </footer>
         </div>
         
@@ -2134,6 +2205,21 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             const imgLight = "{GRAPH_LIGHT_FILENAME}?v={cache_buster}";
             let currentPeriod = 'live';
             let currentSource = 'all';
+            let chartZoom = 1;
+            
+            // Chart zoom function
+            function zoomChart(delta) {{
+                const img = document.getElementById('chartImg');
+                if (delta === 0) {{
+                    // Reset
+                    chartZoom = 1;
+                }} else {{
+                    chartZoom = Math.max(0.5, Math.min(3, chartZoom + delta));
+                }}
+                img.style.transform = `scale(${{chartZoom}})`;
+                img.style.transformOrigin = 'top left';
+                img.style.minWidth = `${{100 / chartZoom}}%`;
+            }}
             
             function toggleTheme() {{
                 const html = document.documentElement;
@@ -2419,12 +2505,12 @@ def generate_feed_html(trades, peg):
 
 # --- MAIN ---
 def main():
-    print("🔍 Running v41.7 (CRITICAL BUG FIXES!)...", file=sys.stderr)
+    print("🔍 Running v41.8 (Deduplication + MEXC Pagination!)...", file=sys.stderr)
     print("   📊 Strategy: 8 snapshots × 15s intervals = 105s coverage (58%!)", file=sys.stderr)
-    print("   🚨 FIXED: Deleted duplicate fetch_binance_both_sides function!", file=sys.stderr)
-    print("   🚨 FIXED: Added deduplication to prevent Binance duplicates!", file=sys.stderr)
-    print("   🚨 FIXED: MEXC should now appear in table!", file=sys.stderr)
-    print("   ✅ KEEP: Pagination (400+ Binance ads)", file=sys.stderr)
+    print("   🚨 FIXED: Bybit duplicate trades (deduplication)", file=sys.stderr)
+    print("   🚨 FIXED: REQUESTs excluded from volume", file=sys.stderr)
+    print("   🚨 FIXED: MEXC pagination 3→10 pages", file=sys.stderr)
+    print("   ✅ NEW: Chart zoom controls", file=sys.stderr)
     print("   💰 COST: Only $50/month!", file=sys.stderr)
     
     # Configuration - MAXIMUM snapshots within GitHub Actions time budget
