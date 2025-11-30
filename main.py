@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v41.8 (Bybit Duplicates + MEXC Pagination!)
-- FIXED: Bybit duplicate trades (deduplication in save_trades)
-- FIXED: REQUEST vs BOUGHT/SOLD clearly differentiated
-- FIXED: REQUESTs excluded from volume calculations
-- FIXED: MEXC pagination increased (3 → 10 pages for more ads)
-- NEW: Chart zoom controls (+ / − / reset)
-- KEEP: All v41.7 fixes (Binance pagination, no duplicate functions)
+🇪🇹 ETB Financial Terminal v42.1 (Fixed Charts + 24h Volume!)
+- FIXED: Scatter chart now shows MEXC (forced order: BINANCE, MEXC, OKX, BYBIT)
+- FIXED: ONE median line across all exchanges (green horizontal)
+- FIXED: Market Insight now shows 24h TRADE VOLUME (not available)
+- IMPROVED: Stacked bars for Buy/Sell volume by exchange
+- KEEP: All v42.0 features
 - COST: Only $50/month for OKX!
 """
 
@@ -1147,6 +1146,33 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
     buys_count = len([t for t in recent_trades if t.get('type') == 'buy'])
     sells_count = len([t for t in recent_trades if t.get('type') == 'sell'])
     
+    # Generate Plotly chart data - ensure all 4 exchanges are represented
+    chart_data = {'BINANCE': [], 'MEXC': [], 'OKX': [], 'BYBIT': []}
+    for source, ads in grouped_ads.items():
+        prices = [a["price"] / peg for a in ads if a.get("price", 0) > 0]  # Normalized prices
+        if prices and source in chart_data:
+            chart_data[source] = prices
+    
+    # Debug: show what we have for each exchange
+    for src in ['BINANCE', 'MEXC', 'OKX', 'BYBIT']:
+        print(f"   Chart data {src}: {len(chart_data.get(src, []))} prices", file=sys.stderr)
+    
+    chart_data_json = json.dumps(chart_data)
+    
+    # Generate history data for trend chart
+    history_data = {
+        'dates': [d.isoformat() if hasattr(d, 'isoformat') else str(d) for d in dates] if dates else [],
+        'medians': medians if medians else [],
+        'officials': [o if o else 0 for o in load_history()[4]] if load_history()[4] else []
+    }
+    history_data_json = json.dumps(history_data)
+    
+    # Calculate 24h trade volume by exchange (using actual trades, not available ads)
+    volume_by_exchange = calculate_volume_by_exchange(recent_trades)
+    
+    # Convert to JSON for JavaScript (24h traded volume)
+    trade_volume_json = json.dumps(volume_by_exchange)
+    
     # Generate feed HTML (server-side rendering of initial state)
     feed_html = generate_feed_html(recent_trades, peg)
     
@@ -1175,10 +1201,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
     print(f"   Buy volume: ${overall_buy_volume:,.0f}", file=sys.stderr)
     print(f"   Sell volume: ${overall_sell_volume:,.0f}", file=sys.stderr)
     
-    # Calculate volume by exchange
-    volume_by_exchange = calculate_volume_by_exchange(recent_trades)
-    
-    # Debug logging
+    # Debug logging for volume by exchange (already calculated above)
     print(f"\n📊 Volume by Exchange:")
     for source, data in volume_by_exchange.items():
         print(f"  {source}: Buy ${data['buy']:,.0f}, Sell ${data['sell']:,.0f}, Total ${data['total']:,.0f}")
@@ -1271,7 +1294,8 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
         <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="refresh" content="300">
-        <title>ETB Market v41.8 - No Duplicates + Zoom</title>
+        <title>ETB Market v42.1 - Fixed Charts + 24h Volume</title>
+        <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
         <style>
             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
             
@@ -1507,46 +1531,20 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                 position: relative;
             }}
             
-            .chart-zoom-controls {{
-                position: absolute;
-                top: 30px;
-                right: 30px;
-                display: flex;
-                gap: 8px;
-                z-index: 10;
+            .plotly-chart {{
+                width: 100%;
+                height: 350px;
+                border-radius: 12px;
             }}
             
-            .zoom-btn {{
-                width: 36px;
-                height: 36px;
-                border-radius: 8px;
-                border: 1px solid var(--border);
-                background: var(--card);
+            .chart-title {{
+                font-size: 16px;
+                font-weight: 600;
                 color: var(--text);
-                cursor: pointer;
-                font-size: 18px;
+                margin-bottom: 12px;
                 display: flex;
                 align-items: center;
-                justify-content: center;
-                transition: all 0.2s;
-            }}
-            
-            .zoom-btn:hover {{
-                background: var(--border);
-            }}
-            
-            .chart-zoom-container {{
-                overflow: auto;
-                max-height: 500px;
-                border-radius: 12px;
-            }}
-            
-            .chart-card img {{
-                width: 100%;
-                min-width: 100%;
-                border-radius: 12px;
-                display: block;
-                transition: transform 0.3s ease;
+                gap: 8px;
             }}
             
             .table-card {{
@@ -1990,15 +1988,16 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                         <button class="time-btn" data-period="1y" onclick="filterTrades('1y')">1Y</button>
                     </div>
                     
+                    <!-- Price Distribution Chart (Plotly) -->
                     <div class="chart-card">
-                        <div class="chart-zoom-controls">
-                            <button class="zoom-btn" onclick="zoomChart(-0.2)" title="Zoom Out">−</button>
-                            <button class="zoom-btn" onclick="zoomChart(0)" title="Reset Zoom">⟲</button>
-                            <button class="zoom-btn" onclick="zoomChart(0.2)" title="Zoom In">+</button>
-                        </div>
-                        <div class="chart-zoom-container" id="chartContainer">
-                            <img src="{GRAPH_FILENAME}?v={cache_buster}" id="chartImg" alt="Market Chart" title="Price Distribution and 24h Trend">
-                        </div>
+                        <div class="chart-title">📊 Live Price Distribution by Exchange</div>
+                        <div id="priceDistChart" class="plotly-chart"></div>
+                    </div>
+                    
+                    <!-- 24h Trend Chart (Plotly) -->
+                    <div class="chart-card">
+                        <div class="chart-title">📈 24h Price Trend</div>
+                        <div id="trendChart" class="plotly-chart"></div>
                     </div>
                     
                     <div class="table-card">
@@ -2140,6 +2139,35 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                 </div>
             </div>
             
+            <!-- Live Market Insight Section - 24h Trade Volume -->
+            <div style="background:var(--card);padding:30px;border-radius:12px;margin-top:30px;border:1px solid var(--border);">
+                <div style="font-size:20px;font-weight:700;margin-bottom:20px;color:var(--text);display:flex;align-items:center;gap:10px;">
+                    <span style="font-size:24px;">📈</span> 24h Trade Volume by Exchange
+                </div>
+                
+                <!-- Stacked Bar Chart for 24h Volume -->
+                <div id="volumeStackedChart" style="display:flex;flex-direction:column;gap:16px;"></div>
+                
+                <!-- Totals -->
+                <div style="display:flex;justify-content:space-between;margin-top:20px;padding-top:20px;border-top:1px solid var(--border);">
+                    <div id="totalBuyVolume" style="font-size:16px;font-weight:600;color:var(--green);"></div>
+                    <div id="totalSellVolume" style="font-size:16px;font-weight:600;color:var(--red);"></div>
+                    <div id="grandTotalVolume" style="font-size:16px;font-weight:700;color:var(--text);"></div>
+                </div>
+                
+                <!-- Legend -->
+                <div style="display:flex;gap:20px;margin-top:15px;justify-content:center;">
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <div style="width:16px;height:16px;background:var(--green);border-radius:4px;"></div>
+                        <span style="font-size:13px;color:var(--text-secondary);">Buy Volume</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <div style="width:16px;height:16px;background:var(--red);border-radius:4px;"></div>
+                        <span style="font-size:13px;color:var(--text-secondary);">Sell Volume</span>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Explanation Section at Bottom -->
             <div style="background:var(--card);padding:30px;border-radius:12px;margin-top:30px;border:1px solid var(--border);">
                 <div style="font-size:20px;font-weight:700;margin-bottom:20px;color:var(--text);text-align:center;">📊 Understanding Market Colors & Terms</div>
@@ -2195,31 +2223,301 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             
             <footer>
                 Official Rate: {official:.2f} ETB | Last Update: {timestamp} UTC<br>
-                v41.8 No Duplicates! • Bybit fixed • MEXC 10 pages • Chart zoom • REQUESTs excluded! 💰✅
+                v42.1 Fixed! • MEXC showing • ONE median • 24h Volume (not available)! 💰✅
             </footer>
         </div>
         
         <script>
             const allTrades = {json.dumps(recent_trades)};
-            const imgDark = "{GRAPH_FILENAME}?v={cache_buster}";
-            const imgLight = "{GRAPH_LIGHT_FILENAME}?v={cache_buster}";
             let currentPeriod = 'live';
             let currentSource = 'all';
-            let chartZoom = 1;
             
-            // Chart zoom function
-            function zoomChart(delta) {{
-                const img = document.getElementById('chartImg');
-                if (delta === 0) {{
-                    // Reset
-                    chartZoom = 1;
-                }} else {{
-                    chartZoom = Math.max(0.5, Math.min(3, chartZoom + delta));
+            // Chart data from Python
+            const chartData = {chart_data_json};
+            const historyData = {history_data_json};
+            const tradeVolume = {trade_volume_json};
+            
+            // Render 24h trade volume stacked bars
+            function renderMarketInsight() {{
+                const colors = {{
+                    'BINANCE': '#F3BA2F',
+                    'MEXC': '#2E55E6', 
+                    'OKX': '#A855F7',
+                    'BYBIT': '#FF6B00'
+                }};
+                const emojis = {{
+                    'BINANCE': '🟡',
+                    'MEXC': '🔵',
+                    'OKX': '🟣',
+                    'BYBIT': '🟠'
+                }};
+                
+                // Calculate max total for scaling
+                let maxTotal = 0;
+                let totalBuy = 0, totalSell = 0;
+                for (const [ex, data] of Object.entries(tradeVolume)) {{
+                    maxTotal = Math.max(maxTotal, (data.buy || 0) + (data.sell || 0));
+                    totalBuy += data.buy || 0;
+                    totalSell += data.sell || 0;
                 }}
-                img.style.transform = `scale(${{chartZoom}})`;
-                img.style.transformOrigin = 'top left';
-                img.style.minWidth = `${{100 / chartZoom}}%`;
+                
+                // Render stacked bars
+                const container = document.getElementById('volumeStackedChart');
+                let html = '';
+                
+                for (const ex of ['BINANCE', 'MEXC', 'OKX', 'BYBIT']) {{
+                    const data = tradeVolume[ex] || {{ buy: 0, sell: 0, total: 0 }};
+                    const buyVol = data.buy || 0;
+                    const sellVol = data.sell || 0;
+                    const total = buyVol + sellVol;
+                    
+                    const buyPct = maxTotal > 0 ? (buyVol / maxTotal * 100) : 0;
+                    const sellPct = maxTotal > 0 ? (sellVol / maxTotal * 100) : 0;
+                    
+                    html += `
+                        <div style="display:flex;align-items:center;gap:12px;">
+                            <div style="width:100px;display:flex;align-items:center;gap:8px;">
+                                <span style="font-size:18px;">${{emojis[ex]}}</span>
+                                <span style="color:${{colors[ex]}};font-weight:700;font-size:14px;">${{ex}}</span>
+                            </div>
+                            <div style="flex:1;height:32px;background:var(--border);border-radius:8px;overflow:hidden;display:flex;">
+                                <div style="height:100%;width:${{buyPct}}%;background:var(--green);transition:width 0.5s;" title="Buy: $${{buyVol.toLocaleString()}}"></div>
+                                <div style="height:100%;width:${{sellPct}}%;background:var(--red);transition:width 0.5s;" title="Sell: $${{sellVol.toLocaleString()}}"></div>
+                            </div>
+                            <div style="width:180px;display:flex;gap:10px;justify-content:flex-end;">
+                                <span style="color:var(--green);font-size:13px;font-weight:600;">$${{buyVol > 0 ? buyVol.toLocaleString() : '0'}}</span>
+                                <span style="color:var(--text-secondary);">/</span>
+                                <span style="color:var(--red);font-size:13px;font-weight:600;">$${{sellVol > 0 ? sellVol.toLocaleString() : '0'}}</span>
+                            </div>
+                        </div>
+                    `;
+                }}
+                container.innerHTML = html;
+                
+                // Update totals
+                document.getElementById('totalBuyVolume').innerHTML = `🟢 Total Buy: $${{totalBuy.toLocaleString()}}`;
+                document.getElementById('totalSellVolume').innerHTML = `🔴 Total Sell: $${{totalSell.toLocaleString()}}`;
+                document.getElementById('grandTotalVolume').innerHTML = `💰 Grand Total: $${{(totalBuy + totalSell).toLocaleString()}}`;
             }}
+            
+            // Initialize Plotly Charts
+            function initCharts() {{
+                const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+                const bgColor = isDark ? '#1C1C1E' : '#ffffff';
+                const textColor = isDark ? '#ffffff' : '#1a1a1a';
+                const gridColor = isDark ? '#38383A' : '#e0e0e0';
+                
+                // Price Distribution Chart (SCATTER with ONE median line)
+                const scatterTraces = [];
+                const colors = {{
+                    'BINANCE': '#F3BA2F',
+                    'MEXC': '#2E55E6', 
+                    'OKX': '#A855F7',
+                    'BYBIT': '#FF6B00'
+                }};
+                
+                let allPrices = [];
+                let xIndex = 0;
+                const exchangeOrder = ['BINANCE', 'MEXC', 'OKX', 'BYBIT'];
+                const exchangeNames = [];
+                
+                // First pass: collect all prices and create scatter traces
+                for (const exchange of exchangeOrder) {{
+                    const prices = chartData[exchange];
+                    if (prices && prices.length > 0) {{
+                        allPrices = allPrices.concat(prices);
+                        exchangeNames.push(exchange);
+                        
+                        // Create jittered x positions for scatter effect
+                        const xPositions = prices.map(() => xIndex + (Math.random() - 0.5) * 0.6);
+                        scatterTraces.push({{
+                            type: 'scatter',
+                            mode: 'markers',
+                            name: exchange,
+                            x: xPositions,
+                            y: prices,
+                            marker: {{ 
+                                color: colors[exchange] || '#00C805',
+                                size: 10,
+                                opacity: 0.75,
+                                line: {{ color: 'rgba(255,255,255,0.5)', width: 1 }}
+                            }},
+                            hovertemplate: '<b>%{{y:.2f}} ETB</b><extra>' + exchange + '</extra>'
+                        }});
+                        xIndex++;
+                    }}
+                }}
+                
+                // Calculate ONE overall median from all prices
+                if (allPrices.length > 0) {{
+                    const sortedAll = [...allPrices].sort((a, b) => a - b);
+                    const overallMedian = sortedAll[Math.floor(sortedAll.length / 2)];
+                    
+                    // Add ONE horizontal median line across all exchanges
+                    scatterTraces.push({{
+                        type: 'scatter',
+                        mode: 'lines',
+                        name: 'Median: ' + overallMedian.toFixed(2) + ' ETB',
+                        x: [-0.5, exchangeNames.length - 0.5],
+                        y: [overallMedian, overallMedian],
+                        line: {{ color: '#00ff9d', width: 3, dash: 'solid' }},
+                        hoverinfo: 'name'
+                    }});
+                }}
+                
+                const minPrice = allPrices.length > 0 ? Math.min(...allPrices) - 5 : 130;
+                const maxPrice = allPrices.length > 0 ? Math.max(...allPrices) + 5 : 190;
+                
+                const scatterLayout = {{
+                    paper_bgcolor: bgColor,
+                    plot_bgcolor: bgColor,
+                    font: {{ color: textColor, family: '-apple-system, BlinkMacSystemFont, sans-serif' }},
+                    showlegend: true,
+                    legend: {{ orientation: 'h', y: -0.15 }},
+                    margin: {{ l: 60, r: 30, t: 30, b: 60 }},
+                    yaxis: {{
+                        title: 'Price (ETB)',
+                        gridcolor: gridColor,
+                        zerolinecolor: gridColor,
+                        range: [minPrice, maxPrice],
+                        dtick: 5
+                    }},
+                    xaxis: {{
+                        gridcolor: gridColor,
+                        tickmode: 'array',
+                        tickvals: exchangeNames.map((_, i) => i),
+                        ticktext: exchangeNames,
+                        range: [-0.5, Math.max(exchangeNames.length - 0.5, 0.5)]
+                    }}
+                }};
+                
+                Plotly.newPlot('priceDistChart', scatterTraces, scatterLayout, {{responsive: true, displayModeBar: false}});
+                
+                // 24h Trend Chart with spread line and data labels
+                if (historyData.dates && historyData.dates.length > 1) {{
+                    const lastIdx = historyData.medians.length - 1;
+                    const lastMedian = historyData.medians[lastIdx];
+                    const lastOfficial = historyData.officials[lastIdx] || 127;
+                    
+                    // Calculate spread (difference) between black market and official
+                    const spreads = historyData.medians.map((m, i) => {{
+                        const off = historyData.officials[i] || 127;
+                        return m - off;
+                    }});
+                    
+                    const trendTraces = [
+                        {{
+                            type: 'scatter',
+                            mode: 'lines',
+                            name: 'Black Market Rate',
+                            x: historyData.dates,
+                            y: historyData.medians,
+                            line: {{ color: '#00ff9d', width: 3 }},
+                            fill: 'tonexty',
+                            fillcolor: 'rgba(0, 255, 157, 0.15)',
+                            hovertemplate: '<b>Black Market:</b> %{{y:.2f}} ETB<extra></extra>'
+                        }}
+                    ];
+                    
+                    if (historyData.officials && historyData.officials.some(v => v > 0)) {{
+                        // Official rate line (draw first so fill works)
+                        trendTraces.unshift({{
+                            type: 'scatter',
+                            mode: 'lines',
+                            name: 'Official Rate',
+                            x: historyData.dates,
+                            y: historyData.officials,
+                            line: {{ color: '#FF9500', width: 2, dash: 'dot' }},
+                            hovertemplate: '<b>Official:</b> %{{y:.2f}} ETB<extra></extra>'
+                        }});
+                        
+                        // Spread line (difference)
+                        trendTraces.push({{
+                            type: 'scatter',
+                            mode: 'lines+markers',
+                            name: 'Spread (Premium)',
+                            x: historyData.dates,
+                            y: spreads,
+                            line: {{ color: '#FF3B30', width: 2, dash: 'dash' }},
+                            marker: {{ size: 4 }},
+                            yaxis: 'y2',
+                            hovertemplate: '<b>Spread:</b> +%{{y:.2f}} ETB<extra></extra>'
+                        }});
+                    }}
+                    
+                    // Calculate y-axis range with padding and round to nearest 10
+                    const allYValues = [...historyData.medians, ...historyData.officials.filter(v => v > 0)];
+                    const minY = Math.floor(Math.min(...allYValues) / 10) * 10 - 10;
+                    const maxY = Math.ceil(Math.max(...allYValues) / 10) * 10 + 20;
+                    
+                    const trendLayout = {{
+                        paper_bgcolor: bgColor,
+                        plot_bgcolor: bgColor,
+                        font: {{ color: textColor, family: '-apple-system, BlinkMacSystemFont, sans-serif' }},
+                        showlegend: true,
+                        legend: {{ orientation: 'h', y: -0.18 }},
+                        margin: {{ l: 60, r: 60, t: 40, b: 70 }},
+                        xaxis: {{
+                            title: 'Time',
+                            gridcolor: gridColor,
+                            tickformat: '%H:%M'
+                        }},
+                        yaxis: {{
+                            title: 'Rate (ETB)',
+                            gridcolor: gridColor,
+                            zerolinecolor: gridColor,
+                            range: [minY, maxY],
+                            dtick: 10
+                        }},
+                        yaxis2: {{
+                            title: 'Spread (ETB)',
+                            overlaying: 'y',
+                            side: 'right',
+                            showgrid: false,
+                            range: [0, Math.max(...spreads) + 10],
+                            dtick: 10
+                        }},
+                        hovermode: 'x unified',
+                        // Add annotations for data labels at end of lines
+                        annotations: [
+                            {{
+                                x: historyData.dates[lastIdx],
+                                y: lastMedian,
+                                xanchor: 'left',
+                                yanchor: 'middle',
+                                text: '<b>' + lastMedian.toFixed(1) + '</b>',
+                                font: {{ color: '#00ff9d', size: 12 }},
+                                showarrow: false,
+                                xshift: 10,
+                                bgcolor: 'rgba(0,0,0,0.7)',
+                                borderpad: 4
+                            }},
+                            {{
+                                x: historyData.dates[lastIdx],
+                                y: lastOfficial,
+                                xanchor: 'left',
+                                yanchor: 'middle',
+                                text: '<b>' + lastOfficial.toFixed(1) + '</b>',
+                                font: {{ color: '#FF9500', size: 12 }},
+                                showarrow: false,
+                                xshift: 10,
+                                bgcolor: 'rgba(0,0,0,0.7)',
+                                borderpad: 4
+                            }}
+                        ]
+                    }};
+                    
+                    Plotly.newPlot('trendChart', trendTraces, trendLayout, {{responsive: true, displayModeBar: false}});
+                }} else {{
+                    document.getElementById('trendChart').innerHTML = '<div style="padding:60px;text-align:center;color:var(--text-secondary)"><div style="font-size:48px;margin-bottom:16px">📈</div><div>Collecting trend data...</div></div>';
+                }}
+            }}
+            
+            // Initialize charts on load
+            document.addEventListener('DOMContentLoaded', function() {{
+                initCharts();
+                renderMarketInsight();
+            }});
             
             function toggleTheme() {{
                 const html = document.documentElement;
@@ -2227,14 +2525,14 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                 const next = current === 'light' ? 'dark' : 'light';
                 html.setAttribute('data-theme', next);
                 localStorage.setItem('theme', next);
-                document.getElementById('chartImg').src = next === 'light' ? imgLight : imgDark;
                 document.getElementById('theme-icon').textContent = next === 'light' ? '☀️' : '🌙';
+                // Reinitialize charts with new theme
+                initCharts();
             }}
             
             (function() {{
                 const theme = localStorage.getItem('theme') || 'dark';
                 document.documentElement.setAttribute('data-theme', theme);
-                document.getElementById('chartImg').src = theme === 'light' ? imgLight : imgDark;
                 document.getElementById('theme-icon').textContent = theme === 'light' ? '☀️' : '🌙';
             }})();
             
@@ -2505,12 +2803,12 @@ def generate_feed_html(trades, peg):
 
 # --- MAIN ---
 def main():
-    print("🔍 Running v41.8 (Deduplication + MEXC Pagination!)...", file=sys.stderr)
+    print("🔍 Running v42.1 (Fixed Charts + 24h Volume!)...", file=sys.stderr)
     print("   📊 Strategy: 8 snapshots × 15s intervals = 105s coverage (58%!)", file=sys.stderr)
-    print("   🚨 FIXED: Bybit duplicate trades (deduplication)", file=sys.stderr)
-    print("   🚨 FIXED: REQUESTs excluded from volume", file=sys.stderr)
-    print("   🚨 FIXED: MEXC pagination 3→10 pages", file=sys.stderr)
-    print("   ✅ NEW: Chart zoom controls", file=sys.stderr)
+    print("   🚨 FIXED: MEXC now shows in scatter chart!", file=sys.stderr)
+    print("   🚨 FIXED: ONE median line (green)", file=sys.stderr)
+    print("   🚨 FIXED: 24h Trade Volume (not available)", file=sys.stderr)
+    print("   ✅ KEEP: All v42.0 features", file=sys.stderr)
     print("   💰 COST: Only $50/month!", file=sys.stderr)
     
     # Configuration - MAXIMUM snapshots within GitHub Actions time budget
