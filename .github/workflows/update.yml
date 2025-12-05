@@ -1,8 +1,7 @@
 name: Update Market Terminal
-
 on:
   schedule:
-    - cron: '*/120 * * * *'  # Runs every 5 minutes
+    - cron: '*/120 * * * *'  # Runs every 2 hours
   workflow_dispatch:        # Allows manual trigger
 
 permissions:
@@ -28,6 +27,9 @@ jobs:
         run: pip install requests matplotlib --break-system-packages
       
       - name: 4. Run Market Scanner
+        env:
+          P2P_ARMY_KEY: ${{ secrets.P2P_ARMY_KEY }}
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
         run: python main.py
       
       - name: 5. Commit & Push (Bulletproof)
