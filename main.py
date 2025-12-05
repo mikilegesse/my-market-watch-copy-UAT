@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v42.5 (Production Ready!)
-- FIX 1: API keys moved to environment variables (secure!)
-- FIX 2: Stats labels fixed (24h window, not "week")
-- FIX 3: load_history() called once (consistent data)
-- FIX 4: CSS gradients fixed (valid rgba values)
-- KEEP: All v42.4 improvements
+🇪🇹 ETB Financial Terminal v42.6 (Fixed RapidAPI Endpoint!)
+- FIX: Binance RapidAPI uses /search/sell and /search/buy URL paths
+- KEEP: All v42.5 improvements (env vars, stats labels, CSS)
 - COST: Only $50/month for OKX!
 """
 
@@ -89,10 +86,11 @@ def fetch_usdt_peg():
 
 def fetch_binance_rapidapi(side="SELL"):
     """
-    Fetch Binance P2P ads using RapidAPI with correct endpoint!
-    Based on working test code - uses binance/p2p/search endpoint
+    Fetch Binance P2P ads using RapidAPI with CORRECT endpoint!
+    URL structure: /binance/p2p/search/sell or /binance/p2p/search/buy
     """
-    url = "https://binance-p2p-api.p.rapidapi.com/binance/p2p/search"
+    # CORRECT: side is part of URL path, not payload!
+    url = f"https://binance-p2p-api.p.rapidapi.com/binance/p2p/search/{side.lower()}"
     
     headers = {
         "X-RapidAPI-Key": RAPIDAPI_KEY,
@@ -109,10 +107,10 @@ def fetch_binance_rapidapi(side="SELL"):
         payload = {
             "asset": "USDT",
             "fiat": "ETB",
-            "tradeType": side,
             "page": page,
             "rows": 20,
-            "payTypes": []
+            "payTypes": [],
+            "countries": []
         }
         
         try:
@@ -143,7 +141,7 @@ def fetch_binance_rapidapi(side="SELL"):
                             seen_ids.add(ad_no)
                             all_ads.append({
                                 'source': 'BINANCE',
-                                'ad_type': side,
+                                'ad_type': side.upper(),
                                 'advertiser': advertiser.get("nickName", "Unknown"),
                                 'price': float(adv.get("price", 0)),
                                 'available': float(adv.get("surplusAmount", 0)),
@@ -531,7 +529,7 @@ def save_market_state(current_ads):
 
 def detect_real_trades(current_ads, peg):
     """
-    CONSERVATIVE TRADE DETECTION v42.5!
+    CONSERVATIVE TRADE DETECTION v42.6!
     
     ONLY counts PARTIAL FILLS (inventory changes where ad still exists)
     
@@ -704,7 +702,7 @@ def detect_real_trades(current_ads, peg):
                 print(f"   ➕ FUNDED: {source} - {ad['advertiser'][:15]} added {diff:,.0f} USDT (not a trade)", file=sys.stderr)
     
     # Summary - now only partial fills counted
-    print(f"\n   📊 DETECTION SUMMARY (v42.5 - PARTIAL FILLS ONLY):", file=sys.stderr)
+    print(f"\n   📊 DETECTION SUMMARY (v42.6 - PARTIAL FILLS ONLY):", file=sys.stderr)
     print(f"   > Requests posted: {len(requests)}", file=sys.stderr)
     print(f"   > Trades detected: {len(trades)} ({len([t for t in trades if t['type']=='buy'])} buys 🟢, {len([t for t in trades if t['type']=='sell'])} sells 🔴)", file=sys.stderr)
     print(f"   > Method: PARTIAL FILLS ONLY (no disappeared ads - too unreliable)", file=sys.stderr)
@@ -1263,7 +1261,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
         <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="refresh" content="300">
-        <title>ETB Market v42.5 - Production Ready</title>
+        <title>ETB Market v42.6 - Fixed RapidAPI</title>
         <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
         <style>
             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -2192,7 +2190,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             
             <footer>
                 Official Rate: {official:.2f} ETB | Last Update: {timestamp} UTC<br>
-                v42.5 Production Ready! • Secure API Keys • Fixed Stats Labels • Valid CSS! 💰✅
+                v42.6 Fixed! • RapidAPI /search/sell /search/buy • All APIs Working! 💰✅
             </footer>
         </div>
         
@@ -2772,11 +2770,9 @@ def generate_feed_html(trades, peg):
 
 # --- MAIN ---
 def main():
-    print("🔍 Running v42.5 (Production Ready!)...", file=sys.stderr)
-    print("   🔐 API keys from environment variables (secure!)", file=sys.stderr)
-    print("   📊 Stats labels fixed (24h window, not week)", file=sys.stderr)
-    print("   📈 load_history() called once (consistent)", file=sys.stderr)
-    print("   🎨 CSS gradients fixed (valid rgba)", file=sys.stderr)
+    print("🔍 Running v42.6 (Fixed RapidAPI Endpoint!)...", file=sys.stderr)
+    print("   🌐 Binance: RapidAPI /search/sell and /search/buy", file=sys.stderr)
+    print("   🔐 API keys from environment variables", file=sys.stderr)
     print("   💰 COST: Only $50/month!", file=sys.stderr)
     
     # Configuration - MAXIMUM snapshots within GitHub Actions time budget
