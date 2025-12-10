@@ -1,30 +1,33 @@
 name: Update Market Terminal
+
 on:
   schedule:
-    - cron: '*/120 * * * *'  # Runs every 2 hours
+    - cron: '*/5 * * * *'  # Runs every 5 minutes
   workflow_dispatch:        # Allows manual trigger
 
 permissions:
   contents: write
 
 jobs:
-  update:
+  build:
     runs-on: ubuntu-latest
+    
     steps:
-      - uses: actions/checkout@v4
+      - name: 1. Checkout Code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
       
-      - name: Run ETB Terminal
-        env:
-          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
-          P2P_ARMY_KEY: ${{ secrets.P2P_ARMY_KEY }}
-        run: |
-          pip install requests matplotlib
-          python main.py
+      - name: 2. Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: 3. Install Libraries
+        run: pip install requests matplotlib --break-system-packages
       
       - name: 4. Run Market Scanner
-        env:
-          P2P_ARMY_KEY: ${{ secrets.P2P_ARMY_KEY }}
-          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
         run: python main.py
       
       - name: 5. Commit & Push (Bulletproof)
