@@ -112,6 +112,11 @@ def fetch_binance_rapidapi(side="SELL"):
     page = 1
     max_pages = 20
     
+    # Debug: Check if API key is set
+    if not RAPIDAPI_KEY or RAPIDAPI_KEY == "YOUR_KEY_HERE":
+        print(f"   ❌ BINANCE {side}: RapidAPI key not set!", file=sys.stderr)
+        return []
+    
     while page <= max_pages:
         payload = {
             "asset": "USDT",
@@ -125,10 +130,18 @@ def fetch_binance_rapidapi(side="SELL"):
         try:
             r = requests.post(url, headers=headers, json=payload, timeout=15)
             
+            # Debug: Log response status
+            if page == 1:
+                print(f"   🔍 BINANCE {side} API status: {r.status_code}", file=sys.stderr)
+            
             if r.status_code == 429:
                 print(f"   ⚠️ Rate limit hit, waiting 5s...", file=sys.stderr)
                 time.sleep(5)
                 continue
+            
+            if r.status_code != 200:
+                print(f"   ❌ BINANCE {side} HTTP error: {r.status_code} - {r.text[:200]}", file=sys.stderr)
+                break
             
             data = r.json()
             
@@ -203,10 +216,28 @@ def fetch_p2p_army_exchange(market, side="SELL"):
     h = HEADERS.copy()
     h["X-APIKEY"] = P2P_ARMY_KEY
     
+    # Debug: Check if API key is set
+    if not P2P_ARMY_KEY or P2P_ARMY_KEY == "YOUR_KEY_HERE":
+        print(f"   ❌ {market.upper()} {side}: p2p.army API key not set!", file=sys.stderr)
+        return []
+    
     try:
         payload = {"market": market, "fiat": "ETB", "asset": "USDT", "side": side, "limit": 100}
         r = requests.post(url, headers=h, json=payload, timeout=10)
+        
+        # Debug: Log response status
+        print(f"   🔍 {market.upper()} {side} API status: {r.status_code}", file=sys.stderr)
+        
+        if r.status_code != 200:
+            print(f"   ❌ {market.upper()} {side} HTTP error: {r.status_code} - {r.text[:200]}", file=sys.stderr)
+            return []
+        
         data = r.json()
+        
+        # Check for API error response
+        if isinstance(data, dict) and data.get("error"):
+            print(f"   ❌ {market.upper()} {side} API error: {data.get('error')}", file=sys.stderr)
+            return []
         
         # Parse response (handles multiple formats)
         candidates = data.get("result", data.get("data", data.get("ads", [])))
@@ -322,6 +353,11 @@ def fetch_mexc_rapidapi(side="SELL"):
     url = "https://mexc-p2p-api.p.rapidapi.com/mexc/p2p/search"  # Correct endpoint!
     ads = []
     
+    # Debug: Check if API key is set
+    if not RAPIDAPI_KEY or RAPIDAPI_KEY == "YOUR_KEY_HERE":
+        print(f"   ❌ MEXC {side}: RapidAPI key not set!", file=sys.stderr)
+        return []
+    
     try:
         headers = {
             "X-RapidAPI-Key": RAPIDAPI_KEY,
@@ -338,6 +374,7 @@ def fetch_mexc_rapidapi(side="SELL"):
             api_side = "BUY"
         
         seen_ids = set()
+        first_request = True
         
         # Dual Strategy: Try both text params AND ID params to catch all ads
         strategies = [
@@ -360,6 +397,15 @@ def fetch_mexc_rapidapi(side="SELL"):
                 try:
                     # CRITICAL: Use GET, not POST!
                     r = requests.get(url, headers=headers, params=params, timeout=10)
+                    
+                    # Debug: Log first request status
+                    if first_request:
+                        print(f"   🔍 MEXC {side} API status: {r.status_code}", file=sys.stderr)
+                        first_request = False
+                        if r.status_code != 200:
+                            print(f"   ❌ MEXC {side} HTTP error: {r.text[:200]}", file=sys.stderr)
+                            break
+                    
                     data = r.json()
                     items = data.get("data", [])
                     
@@ -1959,124 +2005,6 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                         </div>
                     </div>
                     
-                    <!-- Currency Converter -->
-                    <div class="converter-card" style="background:var(--card);border-radius:16px;padding:24px;border:1px solid var(--border);margin-top:20px;">
-                        <div style="font-size:18px;font-weight:700;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
-                            <span style="font-size:24px;">💱</span> Currency Converter
-                        </div>
-                        
-                        <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:end;margin-bottom:20px;">
-                            <div>
-                                <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:6px;">Amount</label>
-                                <input type="number" id="converterAmount" value="1" min="0" step="any" 
-                                    style="width:100%;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:16px;font-weight:600;">
-                            </div>
-                            <div style="display:flex;align-items:center;gap:8px;">
-                                <select id="converterFrom" onchange="updateConverter()" 
-                                    style="padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;">
-                                    <option value="USD">USD</option>
-                                    <option value="ETB">ETB</option>
-                                </select>
-                                <button onclick="swapCurrencies()" style="background:var(--accent);color:white;border:none;border-radius:50%;width:36px;height:36px;cursor:pointer;font-size:16px;">⇄</button>
-                                <select id="converterTo" onchange="updateConverter()" 
-                                    style="padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;">
-                                    <option value="ETB" selected>ETB</option>
-                                    <option value="USD">USD</option>
-                                </select>
-                            </div>
-                            <div>
-                                <button class="converter-btn" style="background:linear-gradient(135deg,var(--accent),#0066cc);color:white;border:none;padding:12px 20px;border-radius:10px;font-weight:600;cursor:pointer;width:100%;">
-                                    🇪🇹 Ethiopian Birr converter
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div style="background:var(--bg);padding:20px;border-radius:12px;border:1px solid var(--border);">
-                            <div style="font-size:24px;font-weight:700;">
-                                <span id="converterInputDisplay">1.00</span> <span id="converterFromDisplay">USD</span> = 
-                                <span style="color:var(--green);" id="converterResult">{stats['median']:.2f}</span> 
-                                <span id="converterToDisplay">ETB</span>
-                            </div>
-                            <div style="font-size:13px;color:var(--text-secondary);margin-top:8px;">
-                                1 USD = {stats['median']:.2f} ETB
-                            </div>
-                            <div style="color:var(--accent);font-size:13px;font-weight:500;">(Black Market Rate)</div>
-                        </div>
-                    </div>
-                    
-                    <!-- Purchasing Power Calculator -->
-                    <div class="power-calc-card" style="background:var(--card);border-radius:16px;padding:24px;border:1px solid var(--border);margin-top:20px;">
-                        <div style="font-size:18px;font-weight:700;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
-                            <span style="font-size:24px;">📉</span> Purchasing Power Calculator
-                        </div>
-                        
-                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;">
-                            <div>
-                                <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:6px;">Amount</label>
-                                <input type="number" id="ppAmount" value="1000" min="0" step="any" onchange="calculatePurchasingPower()"
-                                    style="width:100%;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:16px;font-weight:600;">
-                            </div>
-                            <div>
-                                <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:6px;">Currency</label>
-                                <select id="ppCurrency" onchange="calculatePurchasingPower()"
-                                    style="width:100%;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;">
-                                    <option value="USD" selected>USD</option>
-                                    <option value="ETB">ETB</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:6px;">From</label>
-                                <select id="ppFromDate" onchange="calculatePurchasingPower()"
-                                    style="width:100%;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;">
-                                    <option value="2023-01">Jan 2023</option>
-                                    <option value="2023-06">Jun 2023</option>
-                                    <option value="2024-01">Jan 2024</option>
-                                    <option value="2024-06">Jun 2024</option>
-                                    <option value="2024-09">Sep 2024</option>
-                                    <option value="2024-12">Dec 2024</option>
-                                    <option value="2025-01">Jan 2025</option>
-                                    <option value="2025-03">Mar 2025</option>
-                                    <option value="2025-06">Jun 2025</option>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <div style="background:var(--bg);padding:24px;border-radius:12px;border:1px solid var(--border);">
-                            <div style="margin-bottom:16px;">
-                                <div style="font-size:28px;font-weight:700;" id="ppAmountDisplay">1,000</div>
-                                <div style="font-size:18px;font-weight:600;" id="ppCurrencyDisplay">USD</div>
-                                <div style="font-size:14px;color:var(--text-secondary);">in</div>
-                                <div style="font-size:18px;font-weight:700;" id="ppDateDisplay">Jan 2023</div>
-                                <div style="font-size:14px;color:var(--text-secondary);margin-top:8px;">was worth</div>
-                                <div style="font-size:28px;font-weight:700;color:var(--orange);" id="ppOldValue">96,288.77 ETB</div>
-                            </div>
-                            
-                            <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
-                                <div style="font-size:14px;color:var(--text-secondary);">Today that same amount is worth</div>
-                                <div style="font-size:32px;font-weight:700;color:var(--accent);" id="ppNewValue">{stats['median'] * 1000:,.2f} ETB</div>
-                            </div>
-                            
-                            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px;">
-                                <div style="background:var(--card);padding:16px;border-radius:10px;text-align:center;border:1px solid var(--border);">
-                                    <div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">Rate Change</div>
-                                    <div style="font-size:18px;font-weight:700;color:var(--green);" id="ppRateChange">+88.7%</div>
-                                </div>
-                                <div style="background:var(--card);padding:16px;border-radius:10px;text-align:center;border:1px solid var(--border);">
-                                    <div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">ETB Difference</div>
-                                    <div style="font-size:18px;font-weight:700;color:var(--green);" id="ppDifference">+85,434.76 ETB</div>
-                                </div>
-                                <div style="background:var(--card);padding:16px;border-radius:10px;text-align:center;border:1px solid var(--border);">
-                                    <div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">You Would Gain</div>
-                                    <div style="font-size:18px;font-weight:700;color:var(--green);" id="ppGain">+85,434.76 ETB</div>
-                                </div>
-                            </div>
-                            
-                            <div style="font-size:12px;color:var(--text-secondary);font-style:italic;margin-top:16px;text-align:center;">
-                                Based on historical black market exchange rates from our database.
-                            </div>
-                        </div>
-                    </div>
-                    
                     <div class="time-selector" style="margin-top: 20px;">
                         <button class="time-btn active" data-period="live" onclick="filterTrades('live')">LIVE</button>
                         <button class="time-btn" data-period="1h" onclick="filterTrades('1h')">1H</button>
@@ -2317,6 +2245,124 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                     
                     <div style="margin-top:15px;padding-top:15px;border-top:1px solid var(--border);font-size:12px;color:var(--text-secondary);text-align:center;">
                         This approach matches standard exchange behavior and accurately reflects market sentiment.
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Currency Converter (Bottom) -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:30px;">
+                <div class="converter-card" style="background:var(--card);border-radius:16px;padding:24px;border:1px solid var(--border);">
+                    <div style="font-size:18px;font-weight:700;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
+                        <span style="font-size:24px;">💱</span> Currency Converter
+                    </div>
+                    
+                    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px;">
+                        <div>
+                            <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:6px;">Amount</label>
+                            <input type="number" id="converterAmount" value="1" min="0" step="any" 
+                                style="width:100%;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:16px;font-weight:600;">
+                        </div>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <select id="converterFrom" onchange="updateConverter()" 
+                                style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;">
+                                <option value="USD">USD - US Dollar</option>
+                                <option value="ETB">ETB - Ethiopian Birr</option>
+                            </select>
+                            <button onclick="swapCurrencies()" style="background:var(--accent);color:white;border:none;border-radius:50%;width:40px;height:40px;cursor:pointer;font-size:18px;">⇄</button>
+                            <select id="converterTo" onchange="updateConverter()" 
+                                style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;">
+                                <option value="ETB" selected>ETB - Ethiopian Birr</option>
+                                <option value="USD">USD - US Dollar</option>
+                            </select>
+                        </div>
+                        <button class="converter-btn" onclick="updateConverter()" style="background:linear-gradient(135deg,var(--accent),#0066cc);color:white;border:none;padding:14px 20px;border-radius:10px;font-weight:600;cursor:pointer;width:100%;font-size:15px;">
+                            🇪🇹 Ethiopian Birr converter
+                        </button>
+                    </div>
+                    
+                    <div style="background:var(--bg);padding:20px;border-radius:12px;border:1px solid var(--border);">
+                        <div style="font-size:28px;font-weight:700;">
+                            <span id="converterInputDisplay">1.00</span> <span id="converterFromDisplay">USD</span> = 
+                            <span style="color:var(--green);" id="converterResult">{stats['median']:.2f}</span> 
+                            <span id="converterToDisplay">ETB</span>
+                        </div>
+                        <div style="font-size:13px;color:var(--text-secondary);margin-top:8px;">
+                            1 USD = {stats['median']:.2f} ETB
+                        </div>
+                        <div style="color:var(--accent);font-size:13px;font-weight:500;">(Black Market Rate)</div>
+                    </div>
+                </div>
+                
+                <!-- Purchasing Power Calculator -->
+                <div class="power-calc-card" style="background:var(--card);border-radius:16px;padding:24px;border:1px solid var(--border);">
+                    <div style="font-size:18px;font-weight:700;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
+                        <span style="font-size:24px;">📉</span> Purchasing Power Calculator
+                    </div>
+                    
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;">
+                        <div>
+                            <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:6px;">Amount</label>
+                            <input type="number" id="ppAmount" value="1000" min="0" step="any" onchange="calculatePurchasingPower()"
+                                style="width:100%;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:16px;font-weight:600;">
+                        </div>
+                        <div>
+                            <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:6px;">Currency</label>
+                            <select id="ppCurrency" onchange="calculatePurchasingPower()"
+                                style="width:100%;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;">
+                                <option value="USD" selected>USD</option>
+                                <option value="ETB">ETB</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:6px;">From</label>
+                            <select id="ppFromDate" onchange="calculatePurchasingPower()"
+                                style="width:100%;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;">
+                                <option value="2023-01">Jan 2023</option>
+                                <option value="2023-06">Jun 2023</option>
+                                <option value="2024-01">Jan 2024</option>
+                                <option value="2024-06">Jun 2024</option>
+                                <option value="2024-09">Sep 2024</option>
+                                <option value="2024-12">Dec 2024</option>
+                                <option value="2025-01">Jan 2025</option>
+                                <option value="2025-03">Mar 2025</option>
+                                <option value="2025-06">Jun 2025</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div style="background:var(--bg);padding:20px;border-radius:12px;border:1px solid var(--border);">
+                        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                            <div>
+                                <div style="font-size:24px;font-weight:700;" id="ppAmountDisplay">1,000</div>
+                                <div style="font-size:16px;font-weight:600;" id="ppCurrencyDisplay">USD</div>
+                                <div style="font-size:13px;color:var(--text-secondary);">in <span id="ppDateDisplay">Jan 2023</span></div>
+                                <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;">was worth</div>
+                                <div style="font-size:22px;font-weight:700;color:var(--orange);" id="ppOldValue">96,288.77 ETB</div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div style="font-size:13px;color:var(--text-secondary);">Today worth</div>
+                                <div style="font-size:26px;font-weight:700;color:var(--accent);" id="ppNewValue">{stats['median'] * 1000:,.2f} ETB</div>
+                            </div>
+                        </div>
+                        
+                        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+                            <div style="text-align:center;">
+                                <div style="font-size:10px;color:var(--text-secondary);text-transform:uppercase;">Rate Change</div>
+                                <div style="font-size:16px;font-weight:700;color:var(--green);" id="ppRateChange">+88.7%</div>
+                            </div>
+                            <div style="text-align:center;">
+                                <div style="font-size:10px;color:var(--text-secondary);text-transform:uppercase;">ETB Difference</div>
+                                <div style="font-size:16px;font-weight:700;color:var(--green);" id="ppDifference">+85,434.76 ETB</div>
+                            </div>
+                            <div style="text-align:center;">
+                                <div style="font-size:10px;color:var(--text-secondary);text-transform:uppercase;">You Would Gain</div>
+                                <div style="font-size:16px;font-weight:700;color:var(--green);" id="ppGain">+85,434.76 ETB</div>
+                            </div>
+                        </div>
+                        
+                        <div style="font-size:11px;color:var(--text-secondary);font-style:italic;margin-top:12px;text-align:center;">
+                            Based on historical black market exchange rates from our database.
+                        </div>
                     </div>
                 </div>
             </div>
@@ -3018,6 +3064,12 @@ def main():
     print("   🌐 Binance: RapidAPI /search/sell and /search/buy", file=sys.stderr)
     print("   🔐 API keys from environment variables", file=sys.stderr)
     print("   💰 COST: Only $50/month!", file=sys.stderr)
+    
+    # Debug: Show API key status
+    rapidapi_status = "✅ SET" if RAPIDAPI_KEY and len(RAPIDAPI_KEY) > 10 else "❌ NOT SET"
+    p2p_army_status = "✅ SET" if P2P_ARMY_KEY and len(P2P_ARMY_KEY) > 10 else "❌ NOT SET"
+    print(f"   🔑 RapidAPI Key: {rapidapi_status} (len={len(RAPIDAPI_KEY) if RAPIDAPI_KEY else 0})", file=sys.stderr)
+    print(f"   🔑 P2P Army Key: {p2p_army_status} (len={len(P2P_ARMY_KEY) if P2P_ARMY_KEY else 0})", file=sys.stderr)
     
     # Configuration - MAXIMUM snapshots within GitHub Actions time budget
     NUM_SNAPSHOTS = 8  # Increased from 4 to 8!
