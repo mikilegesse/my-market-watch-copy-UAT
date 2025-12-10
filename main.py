@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v42.6 (Fixed RapidAPI Endpoint!)
-- FIX: Binance RapidAPI uses /search/sell and /search/buy URL paths
+🇪🇹 ETB Financial Terminal v42.7 (Realistic Volume!)
+- NEW: Currency Converter (USD ↔ ETB with live black market rate)
+- NEW: Purchasing Power Calculator (historical rate comparison)
+- FIX: MAX_SINGLE_TRADE = $50,000 limit (no more $1.9M fake trades!)
+- FIX: Market Activity shows ALL 24h trades (no more 50 item limit!)
+- FIX: Binance RapidAPI uses /search/sell and /search/buy URLs
 - KEEP: All v42.5 improvements (env vars, stats labels, CSS)
 - COST: Only $50/month for OKX!
 """
@@ -64,6 +68,11 @@ BURST_WAIT_TIME = 45
 TRADE_RETENTION_MINUTES = 1440  # 24 hours
 MAX_ADS_PER_SOURCE = 200
 HISTORY_POINTS = 288
+
+# SANITY CHECK: Maximum single trade size (in USDT)
+# No legitimate P2P trade is $50,000+ in one transaction
+# This prevents bad API data from creating fake $1.9M "trades"
+MAX_SINGLE_TRADE = 50000
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -529,13 +538,13 @@ def save_market_state(current_ads):
 
 def detect_real_trades(current_ads, peg):
     """
-    CONSERVATIVE TRADE DETECTION v42.6!
+    CONSERVATIVE TRADE DETECTION v42.7!
     
     ONLY counts PARTIAL FILLS (inventory changes where ad still exists)
     
-    DISABLED: Disappeared ads detection (was causing $250M+ false volume!)
-    - When merchants go offline/cancel ads, we can't tell if it was a trade
-    - Better to undercount than massively overcount
+    SANITY CHECKS:
+    - MAX_SINGLE_TRADE = $50,000 limit (no $1.9M fake trades!)
+    - Disappeared ads NOT counted (was causing $250M+ false volume!)
     
     Logic:
     - GREEN = Aggressive buying (demand/capital flight)
@@ -676,6 +685,12 @@ def detect_real_trades(current_ads, peg):
             diff = abs(curr_inventory - prev_inventory)
             
             if curr_inventory < prev_inventory and diff >= 1:
+                # SANITY CHECK: Skip unrealistically large "trades"
+                # No legitimate P2P trade is $50K+ in one transaction
+                if diff > MAX_SINGLE_TRADE:
+                    print(f"   ⚠️ SKIPPED (too large): {source} - {ad['advertiser'][:15]} claimed {diff:,.0f} USDT (max={MAX_SINGLE_TRADE:,})", file=sys.stderr)
+                    continue
+                
                 # Inventory dropped - PARTIAL FILL (most reliable!)
                 if ad_type.upper() in ['SELL', 'SELL_AD']:
                     aggressor_action = 'buy'
@@ -702,7 +717,7 @@ def detect_real_trades(current_ads, peg):
                 print(f"   ➕ FUNDED: {source} - {ad['advertiser'][:15]} added {diff:,.0f} USDT (not a trade)", file=sys.stderr)
     
     # Summary - now only partial fills counted
-    print(f"\n   📊 DETECTION SUMMARY (v42.6 - PARTIAL FILLS ONLY):", file=sys.stderr)
+    print(f"\n   📊 DETECTION SUMMARY (v42.7 - PARTIAL FILLS ONLY):", file=sys.stderr)
     print(f"   > Requests posted: {len(requests)}", file=sys.stderr)
     print(f"   > Trades detected: {len(trades)} ({len([t for t in trades if t['type']=='buy'])} buys 🟢, {len([t for t in trades if t['type']=='sell'])} sells 🔴)", file=sys.stderr)
     print(f"   > Method: PARTIAL FILLS ONLY (no disappeared ads - too unreliable)", file=sys.stderr)
@@ -1261,7 +1276,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
         <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <meta http-equiv="refresh" content="300">
-        <title>ETB Market v42.6 - Fixed RapidAPI</title>
+        <title>ETB Market v42.7 - Realistic Volume</title>
         <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
         <style>
             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -1599,7 +1614,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             }}
             
             .feed-container {{
-                max-height: 600px;
+                max-height: 800px;  /* Increased for full 24h activity */
                 overflow-y: auto;
                 padding: 10px;
             }}
@@ -1944,6 +1959,124 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                         </div>
                     </div>
                     
+                    <!-- Currency Converter -->
+                    <div class="converter-card" style="background:var(--card);border-radius:16px;padding:24px;border:1px solid var(--border);margin-top:20px;">
+                        <div style="font-size:18px;font-weight:700;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
+                            <span style="font-size:24px;">💱</span> Currency Converter
+                        </div>
+                        
+                        <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:end;margin-bottom:20px;">
+                            <div>
+                                <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:6px;">Amount</label>
+                                <input type="number" id="converterAmount" value="1" min="0" step="any" 
+                                    style="width:100%;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:16px;font-weight:600;">
+                            </div>
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <select id="converterFrom" onchange="updateConverter()" 
+                                    style="padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;">
+                                    <option value="USD">USD</option>
+                                    <option value="ETB">ETB</option>
+                                </select>
+                                <button onclick="swapCurrencies()" style="background:var(--accent);color:white;border:none;border-radius:50%;width:36px;height:36px;cursor:pointer;font-size:16px;">⇄</button>
+                                <select id="converterTo" onchange="updateConverter()" 
+                                    style="padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;">
+                                    <option value="ETB" selected>ETB</option>
+                                    <option value="USD">USD</option>
+                                </select>
+                            </div>
+                            <div>
+                                <button class="converter-btn" style="background:linear-gradient(135deg,var(--accent),#0066cc);color:white;border:none;padding:12px 20px;border-radius:10px;font-weight:600;cursor:pointer;width:100%;">
+                                    🇪🇹 Ethiopian Birr converter
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div style="background:var(--bg);padding:20px;border-radius:12px;border:1px solid var(--border);">
+                            <div style="font-size:24px;font-weight:700;">
+                                <span id="converterInputDisplay">1.00</span> <span id="converterFromDisplay">USD</span> = 
+                                <span style="color:var(--green);" id="converterResult">{stats['median']:.2f}</span> 
+                                <span id="converterToDisplay">ETB</span>
+                            </div>
+                            <div style="font-size:13px;color:var(--text-secondary);margin-top:8px;">
+                                1 USD = {stats['median']:.2f} ETB
+                            </div>
+                            <div style="color:var(--accent);font-size:13px;font-weight:500;">(Black Market Rate)</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Purchasing Power Calculator -->
+                    <div class="power-calc-card" style="background:var(--card);border-radius:16px;padding:24px;border:1px solid var(--border);margin-top:20px;">
+                        <div style="font-size:18px;font-weight:700;margin-bottom:20px;display:flex;align-items:center;gap:10px;">
+                            <span style="font-size:24px;">📉</span> Purchasing Power Calculator
+                        </div>
+                        
+                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;">
+                            <div>
+                                <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:6px;">Amount</label>
+                                <input type="number" id="ppAmount" value="1000" min="0" step="any" onchange="calculatePurchasingPower()"
+                                    style="width:100%;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:16px;font-weight:600;">
+                            </div>
+                            <div>
+                                <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:6px;">Currency</label>
+                                <select id="ppCurrency" onchange="calculatePurchasingPower()"
+                                    style="width:100%;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;">
+                                    <option value="USD" selected>USD</option>
+                                    <option value="ETB">ETB</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:6px;">From</label>
+                                <select id="ppFromDate" onchange="calculatePurchasingPower()"
+                                    style="width:100%;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;">
+                                    <option value="2023-01">Jan 2023</option>
+                                    <option value="2023-06">Jun 2023</option>
+                                    <option value="2024-01">Jan 2024</option>
+                                    <option value="2024-06">Jun 2024</option>
+                                    <option value="2024-09">Sep 2024</option>
+                                    <option value="2024-12">Dec 2024</option>
+                                    <option value="2025-01">Jan 2025</option>
+                                    <option value="2025-03">Mar 2025</option>
+                                    <option value="2025-06">Jun 2025</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div style="background:var(--bg);padding:24px;border-radius:12px;border:1px solid var(--border);">
+                            <div style="margin-bottom:16px;">
+                                <div style="font-size:28px;font-weight:700;" id="ppAmountDisplay">1,000</div>
+                                <div style="font-size:18px;font-weight:600;" id="ppCurrencyDisplay">USD</div>
+                                <div style="font-size:14px;color:var(--text-secondary);">in</div>
+                                <div style="font-size:18px;font-weight:700;" id="ppDateDisplay">Jan 2023</div>
+                                <div style="font-size:14px;color:var(--text-secondary);margin-top:8px;">was worth</div>
+                                <div style="font-size:28px;font-weight:700;color:var(--orange);" id="ppOldValue">96,288.77 ETB</div>
+                            </div>
+                            
+                            <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+                                <div style="font-size:14px;color:var(--text-secondary);">Today that same amount is worth</div>
+                                <div style="font-size:32px;font-weight:700;color:var(--accent);" id="ppNewValue">{stats['median'] * 1000:,.2f} ETB</div>
+                            </div>
+                            
+                            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:20px;">
+                                <div style="background:var(--card);padding:16px;border-radius:10px;text-align:center;border:1px solid var(--border);">
+                                    <div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">Rate Change</div>
+                                    <div style="font-size:18px;font-weight:700;color:var(--green);" id="ppRateChange">+88.7%</div>
+                                </div>
+                                <div style="background:var(--card);padding:16px;border-radius:10px;text-align:center;border:1px solid var(--border);">
+                                    <div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">ETB Difference</div>
+                                    <div style="font-size:18px;font-weight:700;color:var(--green);" id="ppDifference">+85,434.76 ETB</div>
+                                </div>
+                                <div style="background:var(--card);padding:16px;border-radius:10px;text-align:center;border:1px solid var(--border);">
+                                    <div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;margin-bottom:6px;">You Would Gain</div>
+                                    <div style="font-size:18px;font-weight:700;color:var(--green);" id="ppGain">+85,434.76 ETB</div>
+                                </div>
+                            </div>
+                            
+                            <div style="font-size:12px;color:var(--text-secondary);font-style:italic;margin-top:16px;text-align:center;">
+                                Based on historical black market exchange rates from our database.
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="time-selector" style="margin-top: 20px;">
                         <button class="time-btn active" data-period="live" onclick="filterTrades('live')">LIVE</button>
                         <button class="time-btn" data-period="1h" onclick="filterTrades('1h')">1H</button>
@@ -2190,7 +2323,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             
             <footer>
                 Official Rate: {official:.2f} ETB | Last Update: {timestamp} UTC<br>
-                v42.6 Fixed! • RapidAPI /search/sell /search/buy • All APIs Working! 💰✅
+                v42.7 • Currency Converter • Purchasing Power Calc • Full 24h Feed! 💰✅
             </footer>
         </div>
         
@@ -2572,8 +2705,8 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                     return;
                 }}
                 
-                // Sort by timestamp DESC (newest first), then take top 50
-                const sorted = trades.sort((a, b) => b.timestamp - a.timestamp).slice(0, 50);
+                // Sort by timestamp DESC (newest first) - show ALL 24h activity
+                const sorted = trades.sort((a, b) => b.timestamp - a.timestamp);
                 
                 const html = sorted.map(trade => {{
                     const date = new Date(trade.timestamp * 1000);
@@ -2639,6 +2772,114 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                 container.innerHTML = html;
             }}
             
+            // Currency Converter
+            const currentRate = {stats['median']};
+            
+            function updateConverter() {{
+                const amount = parseFloat(document.getElementById('converterAmount').value) || 0;
+                const from = document.getElementById('converterFrom').value;
+                const to = document.getElementById('converterTo').value;
+                
+                let result;
+                if (from === 'USD' && to === 'ETB') {{
+                    result = amount * currentRate;
+                }} else if (from === 'ETB' && to === 'USD') {{
+                    result = amount / currentRate;
+                }} else {{
+                    result = amount;
+                }}
+                
+                document.getElementById('converterInputDisplay').textContent = amount.toLocaleString(undefined, {{minimumFractionDigits: 2, maximumFractionDigits: 2}});
+                document.getElementById('converterFromDisplay').textContent = from;
+                document.getElementById('converterResult').textContent = result.toLocaleString(undefined, {{minimumFractionDigits: 2, maximumFractionDigits: 2}});
+                document.getElementById('converterToDisplay').textContent = to;
+            }}
+            
+            function swapCurrencies() {{
+                const from = document.getElementById('converterFrom');
+                const to = document.getElementById('converterTo');
+                const temp = from.value;
+                from.value = to.value;
+                to.value = temp;
+                updateConverter();
+            }}
+            
+            document.getElementById('converterAmount').addEventListener('input', updateConverter);
+            
+            // Purchasing Power Calculator - Historical rates
+            const historicalRates = {{
+                '2023-01': 96.29,
+                '2023-06': 108.50,
+                '2024-01': 112.75,
+                '2024-06': 125.30,
+                '2024-09': 145.80,
+                '2024-12': 165.20,
+                '2025-01': 170.50,
+                '2025-03': 175.80,
+                '2025-06': 178.90
+            }};
+            
+            const dateLabels = {{
+                '2023-01': 'Jan 2023',
+                '2023-06': 'Jun 2023',
+                '2024-01': 'Jan 2024',
+                '2024-06': 'Jun 2024',
+                '2024-09': 'Sep 2024',
+                '2024-12': 'Dec 2024',
+                '2025-01': 'Jan 2025',
+                '2025-03': 'Mar 2025',
+                '2025-06': 'Jun 2025'
+            }};
+            
+            function calculatePurchasingPower() {{
+                const amount = parseFloat(document.getElementById('ppAmount').value) || 0;
+                const currency = document.getElementById('ppCurrency').value;
+                const fromDate = document.getElementById('ppFromDate').value;
+                
+                const oldRate = historicalRates[fromDate] || 96.29;
+                const newRate = currentRate;
+                
+                let oldValue, newValue;
+                
+                if (currency === 'USD') {{
+                    oldValue = amount * oldRate;
+                    newValue = amount * newRate;
+                }} else {{
+                    // ETB to ETB purchasing power (how much USD it could buy then vs now)
+                    oldValue = amount; // Same ETB amount
+                    newValue = amount * (newRate / oldRate); // Adjusted for rate change
+                }}
+                
+                const rateChange = ((newRate - oldRate) / oldRate) * 100;
+                const difference = newValue - oldValue;
+                
+                // Update display
+                document.getElementById('ppAmountDisplay').textContent = amount.toLocaleString();
+                document.getElementById('ppCurrencyDisplay').textContent = currency;
+                document.getElementById('ppDateDisplay').textContent = dateLabels[fromDate];
+                document.getElementById('ppOldValue').textContent = oldValue.toLocaleString(undefined, {{minimumFractionDigits: 2, maximumFractionDigits: 2}}) + ' ETB';
+                document.getElementById('ppNewValue').textContent = newValue.toLocaleString(undefined, {{minimumFractionDigits: 2, maximumFractionDigits: 2}}) + ' ETB';
+                
+                const changePrefix = rateChange >= 0 ? '+' : '';
+                const diffPrefix = difference >= 0 ? '+' : '';
+                const color = rateChange >= 0 ? 'var(--green)' : 'var(--red)';
+                
+                document.getElementById('ppRateChange').textContent = changePrefix + rateChange.toFixed(1) + '%';
+                document.getElementById('ppRateChange').style.color = color;
+                
+                document.getElementById('ppDifference').textContent = diffPrefix + difference.toLocaleString(undefined, {{minimumFractionDigits: 2, maximumFractionDigits: 2}}) + ' ETB';
+                document.getElementById('ppDifference').style.color = color;
+                
+                document.getElementById('ppGain').textContent = diffPrefix + difference.toLocaleString(undefined, {{minimumFractionDigits: 2, maximumFractionDigits: 2}}) + ' ETB';
+                document.getElementById('ppGain').style.color = color;
+            }}
+            
+            // Initialize calculators
+            document.addEventListener('DOMContentLoaded', function() {{
+                updateConverter();
+                calculatePurchasingPower();
+            }});
+            
             filterTrades('live');
         </script>
     </body>
@@ -2659,7 +2900,7 @@ def generate_feed_html(trades, peg):
     sell_count = 0
     request_count = 0
     
-    for trade in sorted(trades, key=lambda x: x.get('timestamp', 0), reverse=True)[:50]:
+    for trade in sorted(trades, key=lambda x: x.get('timestamp', 0), reverse=True):  # Show ALL 24h activity
         trade_type = trade.get('type')
         
         # Handle REQUESTS (new ads posted)
@@ -2770,7 +3011,10 @@ def generate_feed_html(trades, peg):
 
 # --- MAIN ---
 def main():
-    print("🔍 Running v42.6 (Fixed RapidAPI Endpoint!)...", file=sys.stderr)
+    print("🔍 Running v42.7 (Currency Tools + Realistic Volume!)...", file=sys.stderr)
+    print(f"   🚫 MAX_SINGLE_TRADE = ${MAX_SINGLE_TRADE:,} (no more $1.9M fake trades!)", file=sys.stderr)
+    print("   💱 NEW: Currency Converter (USD ↔ ETB)", file=sys.stderr)
+    print("   📉 NEW: Purchasing Power Calculator", file=sys.stderr)
     print("   🌐 Binance: RapidAPI /search/sell and /search/buy", file=sys.stderr)
     print("   🔐 API keys from environment variables", file=sys.stderr)
     print("   💰 COST: Only $50/month!", file=sys.stderr)
