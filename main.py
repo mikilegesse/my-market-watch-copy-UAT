@@ -58,9 +58,12 @@ HEADERS = {
 def generate_ai_summary(stats, official, trade_stats, volume_by_exchange, history_data):
     """Generate AI market analysis using Google Gemini API"""
     
-    if not GEMINI_API_KEY or GEMINI_API_KEY == "YOUR_KEY_HERE":
-        print("   ⚠️ Gemini API key not set, skipping AI summary", file=sys.stderr)
-        return None
+    print(f"   🤖 Starting AI Summary generation...", file=sys.stderr)
+    print(f"   🔑 Gemini API Key: {'✅ SET (len=' + str(len(GEMINI_API_KEY)) + ')' if GEMINI_API_KEY else '❌ NOT SET'}", file=sys.stderr)
+    
+    if not GEMINI_API_KEY or GEMINI_API_KEY == "YOUR_KEY_HERE" or len(GEMINI_API_KEY) < 10:
+        print("   ⚠️ Gemini API key not set or invalid, skipping AI summary", file=sys.stderr)
+        return create_fallback_summary(stats, official, trade_stats)
     
     try:
         # Prepare market context for AI
@@ -119,43 +122,123 @@ Keep each field concise. Focus on practical insights for Ethiopians sending/rece
             }
         }
         
+        print(f"   📡 Calling Gemini API...", file=sys.stderr)
         response = requests.post(url, json=payload, timeout=30)
+        print(f"   📡 Gemini API Status: {response.status_code}", file=sys.stderr)
         
         if response.status_code == 200:
             data = response.json()
             
+            # Check for error in response
+            if 'error' in data:
+                print(f"   ❌ Gemini API returned error: {data['error']}", file=sys.stderr)
+                return create_fallback_summary(stats, official, trade_stats)
+            
             # Extract text from response
-            text = data.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')
+            candidates = data.get('candidates', [])
+            if not candidates:
+                print(f"   ⚠️ No candidates in Gemini response", file=sys.stderr)
+                return create_fallback_summary(stats, official, trade_stats)
             
-            # Parse JSON from response
-            # Find JSON in the response (might be wrapped in markdown)
+            text = candidates[0].get('content', {}).get('parts', [{}])[0].get('text', '')
+            print(f"   📝 Gemini response length: {len(text)} chars", file=sys.stderr)
+            
+            if not text:
+                print(f"   ⚠️ Empty text in Gemini response", file=sys.stderr)
+                return create_fallback_summary(stats, official, trade_stats)
+            
+            # Parse JSON from response (might be wrapped in markdown ```json ... ```)
             import re
-            json_match = re.search(r'\{[\s\S]*\}', text)
+            # Try to find JSON block
+            json_match = re.search(r'```json\s*([\s\S]*?)\s*```', text)
             if json_match:
-                ai_data = json.loads(json_match.group())
-                ai_data['generated_at'] = datetime.datetime.now().isoformat()
-                ai_data['rate_at_generation'] = black_market_rate
-                
-                # Save to file for caching
-                with open(AI_SUMMARY_FILE, 'w') as f:
-                    json.dump(ai_data, f)
-                
-                print(f"   🤖 AI Summary generated successfully", file=sys.stderr)
-                return ai_data
+                json_str = json_match.group(1)
             else:
-                print(f"   ⚠️ Could not parse AI response", file=sys.stderr)
-                return None
-        else:
-            print(f"   ❌ Gemini API error: {response.status_code} - {response.text[:200]}", file=sys.stderr)
-            return None
+                # Try to find raw JSON
+                json_match = re.search(r'\{[\s\S]*\}', text)
+                json_str = json_match.group() if json_match else None
             
+            if json_str:
+                try:
+                    ai_data = json.loads(json_str)
+                    ai_data['generated_at'] = datetime.datetime.now().isoformat()
+                    ai_data['rate_at_generation'] = black_market_rate
+                    
+                    # Save to file for caching
+                    with open(AI_SUMMARY_FILE, 'w') as f:
+                        json.dump(ai_data, f)
+                    
+                    print(f"   ✅ AI Summary generated successfully!", file=sys.stderr)
+                    return ai_data
+                except json.JSONDecodeError as je:
+                    print(f"   ⚠️ JSON parse error: {je}", file=sys.stderr)
+                    print(f"   Raw JSON: {json_str[:200]}", file=sys.stderr)
+                    return create_fallback_summary(stats, official, trade_stats)
+            else:
+                print(f"   ⚠️ Could not find JSON in response", file=sys.stderr)
+                print(f"   Raw text: {text[:300]}", file=sys.stderr)
+                return create_fallback_summary(stats, official, trade_stats)
+        else:
+            print(f"   ❌ Gemini API HTTP error: {response.status_code}", file=sys.stderr)
+            print(f"   Response: {response.text[:300]}", file=sys.stderr)
+            return create_fallback_summary(stats, official, trade_stats)
+            
+    except requests.exceptions.Timeout:
+        print(f"   ❌ Gemini API timeout (30s)", file=sys.stderr)
+        return create_fallback_summary(stats, official, trade_stats)
+    except requests.exceptions.RequestException as e:
+        print(f"   ❌ Gemini API request error: {e}", file=sys.stderr)
+        return create_fallback_summary(stats, official, trade_stats)
     except Exception as e:
-        print(f"   ❌ AI Summary error: {e}", file=sys.stderr)
-        return None
+        print(f"   ❌ AI Summary error: {type(e).__name__}: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        return create_fallback_summary(stats, official, trade_stats)
+
+def create_fallback_summary(stats, official, trade_stats):
+    """Create a rule-based fallback summary when AI is unavailable"""
+    print(f"   📋 Using fallback rule-based summary", file=sys.stderr)
+    
+    black_market_rate = stats.get('median', 0)
+    premium = ((black_market_rate - official) / official * 100) if official > 0 else 0
+    
+    buy_vol = trade_stats.get('overall_buy_volume', 0)
+    sell_vol = trade_stats.get('overall_sell_volume', 0)
+    
+    # Determine sentiment based on buy/sell ratio
+    if buy_vol > sell_vol * 1.5:
+        sentiment = "bullish"
+        sentiment_text = "Strong buying pressure indicates demand for USDT/USD"
+    elif sell_vol > buy_vol * 1.5:
+        sentiment = "bearish"
+        sentiment_text = "Strong selling pressure indicates USDT supply increase"
+    else:
+        sentiment = "neutral"
+        sentiment_text = "Balanced buy/sell activity with stable market conditions"
+    
+    return {
+        "market_sentiment": sentiment,
+        "summary": f"The ETB black market rate is currently {black_market_rate:.2f} ETB/USD, representing a {premium:.1f}% premium over the official rate of {official:.2f} ETB. {sentiment_text}.",
+        "key_insights": [
+            f"Black market premium: {premium:.1f}% above official rate",
+            f"24h volume: ${buy_vol + sell_vol:,.0f} USDT traded",
+            f"Market spread: {stats.get('min', 0):.2f} - {stats.get('max', 0):.2f} ETB"
+        ],
+        "short_term_prediction": "Market expected to remain within current range. Monitor NBE policy announcements.",
+        "risk_factors": [
+            "Exchange rate volatility during policy changes",
+            "P2P transaction counterparty risks"
+        ],
+        "recommendation": "For remittances, compare legal channel rates. Legal channels offer security despite lower rates.",
+        "generated_at": datetime.datetime.now().isoformat(),
+        "rate_at_generation": black_market_rate,
+        "is_fallback": True
+    }
 
 def load_cached_ai_summary():
     """Load cached AI summary if recent (within 1 hour)"""
     if not os.path.exists(AI_SUMMARY_FILE):
+        print(f"   📋 No cached AI summary found", file=sys.stderr)
         return None
     
     try:
@@ -170,8 +253,10 @@ def load_cached_ai_summary():
             print(f"   📋 Using cached AI summary ({int(age.total_seconds()/60)}min old)", file=sys.stderr)
             return data
         else:
+            print(f"   📋 Cached AI summary expired ({int(age.total_seconds()/60)}min old)", file=sys.stderr)
             return None
-    except:
+    except Exception as e:
+        print(f"   ⚠️ Error loading cached summary: {e}", file=sys.stderr)
         return None
 
 # --- LEGAL REMITTANCE FETCHERS ---
@@ -1289,6 +1374,10 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
         sentiment_color = '#00C805' if sentiment == 'bullish' else '#FF3B30' if sentiment == 'bearish' else '#FF9500'
         sentiment_emoji = '📈' if sentiment == 'bullish' else '📉' if sentiment == 'bearish' else '➡️'
         
+        is_fallback = ai_summary.get('is_fallback', False)
+        source_text = "Rule-Based Analysis" if is_fallback else f"Powered by Google Gemini"
+        source_badge = '<span style="background:#FF950033;color:#FF9500;padding:2px 8px;border-radius:4px;font-size:11px;margin-left:8px;">FALLBACK</span>' if is_fallback else ''
+        
         insights_html = ""
         for insight in ai_summary.get('key_insights', []):
             insights_html += f"<li style='margin-bottom:8px;'>{insight}</li>"
@@ -1299,11 +1388,11 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
         
         ai_summary_html = f"""
         <div style="background:linear-gradient(135deg, var(--card), rgba(10,132,255,0.1));padding:30px;border-radius:16px;margin-top:30px;border:2px solid var(--accent);">
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
                 <span style="font-size:32px;">🤖</span>
                 <div>
-                    <div style="font-size:22px;font-weight:700;color:var(--text);">AI Market Analysis</div>
-                    <div style="font-size:13px;color:var(--text-secondary);">Powered by Google Gemini • Updated {ai_summary.get('generated_at', 'recently')[:16]}</div>
+                    <div style="font-size:22px;font-weight:700;color:var(--text);">Market Analysis{source_badge}</div>
+                    <div style="font-size:13px;color:var(--text-secondary);">{source_text} • {ai_summary.get('generated_at', 'recently')[:16]}</div>
                 </div>
                 <div style="margin-left:auto;background:{sentiment_color}22;padding:8px 16px;border-radius:20px;border:1px solid {sentiment_color};">
                     <span style="font-size:18px;">{sentiment_emoji}</span>
@@ -1335,7 +1424,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px;">
                 <div style="background:var(--card);padding:20px;border-radius:12px;border:1px solid var(--border);">
-                    <div style="font-weight:700;color:var(--accent);margin-bottom:8px;">📅 Short-Term Prediction (1-7 Days)</div>
+                    <div style="font-weight:700;color:var(--accent);margin-bottom:8px;">📅 Short-Term Outlook</div>
                     <div style="color:var(--text);line-height:1.6;">{ai_summary.get('short_term_prediction', 'Not available')}</div>
                 </div>
                 
@@ -1347,11 +1436,12 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
         </div>
         """
     else:
+        # This should never happen now with fallback, but just in case
         ai_summary_html = """
         <div style="background:var(--card);padding:30px;border-radius:16px;margin-top:30px;border:1px solid var(--border);text-align:center;">
             <span style="font-size:48px;">🤖</span>
-            <div style="font-size:18px;font-weight:600;margin-top:12px;color:var(--text);">AI Analysis Loading...</div>
-            <div style="font-size:14px;color:var(--text-secondary);margin-top:8px;">Gemini AI will analyze the market on next update</div>
+            <div style="font-size:18px;font-weight:600;margin-top:12px;color:var(--text);">AI Analysis Unavailable</div>
+            <div style="font-size:14px;color:var(--text-secondary);margin-top:8px;">Check GitHub Actions logs for details</div>
         </div>
         """
     
@@ -2016,6 +2106,11 @@ def main():
             ai_summary = load_cached_ai_summary()
             if not ai_summary:
                 ai_summary = generate_ai_summary(stats, official, trade_stats, volume_by_exchange, history_data)
+            
+            # Final fallback - should never reach here but just in case
+            if not ai_summary:
+                print("   ⚠️ All AI methods failed, using emergency fallback", file=sys.stderr)
+                ai_summary = create_fallback_summary(stats, official, trade_stats)
             
             update_website_html(
                 stats, official,
