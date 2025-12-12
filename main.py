@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
-🇪🇹 ETB Financial Terminal v42.9 (AI + Remittance Rates!)
-- NEW: Gemini AI Market Analysis with Forecasting at bottom
+🇪🇹 ETB Financial Terminal v42.9 (AI + Market Depth!)
+- NEW: Gemini AI Analysis with Gap Explanation (why black market vs official differs)
+- NEW: Price Trend with Premium % + Time filters (1H, 1D, 1W, ALL)
+- NEW: Live Market Insight - Supply/Demand by Price with stacked exchange bars
+- NEW: Black Market Drivers & Official Rate Factors in AI section
 - NEW: Remitly, Western Union, Ria rates in ticker slider
 - NEW: p2p.army fallback when RapidAPI fails (502 errors)
 - REMOVED: Bybit (per user request)
@@ -491,6 +494,9 @@ Based on this data and your knowledge of Ethiopian economic conditions, provide 
     "market_sentiment": "bullish/bearish/neutral",
     "summary": "2-3 sentence market summary explaining current conditions",
     "key_insights": ["insight 1", "insight 2", "insight 3"],
+    "black_market_drivers": ["factor driving black market rate up/down 1", "factor 2", "factor 3"],
+    "official_rate_factors": ["factor affecting official NBE rate 1", "factor 2"],
+    "gap_explanation": "Why is there a {premium:.1f}% gap between black market and official rate? Explain the key reasons.",
     "short_term_forecast": "Detailed 1-7 day price prediction with specific range",
     "medium_term_forecast": "1-4 week outlook based on trends",
     "risk_factors": ["risk 1", "risk 2"],
@@ -498,7 +504,7 @@ Based on this data and your knowledge of Ethiopian economic conditions, provide 
     "confidence_level": "high/medium/low"
 }}
 
-Focus on actionable insights. Be specific about price forecasts."""
+Focus on actionable insights. Be specific about price forecasts. Explain what economic factors are driving the difference between black market and official rates."""
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
         
@@ -604,6 +610,16 @@ def create_fallback_summary(stats, official, trade_stats):
             f"24h volume: ${buy_vol + sell_vol:,.0f} USDT traded",
             f"Market spread: {stats.get('min', 0):.2f} - {stats.get('max', 0):.2f} ETB"
         ],
+        "black_market_drivers": [
+            "High demand for USD from importers and businesses",
+            "Limited forex availability through official channels",
+            "Diaspora remittance preferences for better rates"
+        ],
+        "official_rate_factors": [
+            "NBE monetary policy and forex reserves",
+            "IMF program requirements and reform timeline"
+        ],
+        "gap_explanation": f"The {premium:.1f}% gap exists primarily due to foreign currency shortage in official banking channels, forcing businesses to seek USD through parallel markets at premium rates.",
         "short_term_forecast": forecast,
         "medium_term_forecast": "Market expected to remain volatile. Monitor NBE policy announcements for direction.",
         "risk_factors": [
@@ -1064,6 +1080,60 @@ def calculate_volume_by_exchange(trades):
     
     return volumes
 
+def calculate_market_depth_by_price(ads, peg):
+    """Calculate market depth (supply/demand) by price level for stacked bar chart"""
+    if not ads:
+        return {'supply': [], 'demand': []}
+    
+    # Group ads by price bins and exchange
+    supply_by_price = {}  # SELL ads = supply
+    demand_by_price = {}  # BUY ads = demand
+    
+    for ad in ads:
+        price = ad.get('price', 0) / peg
+        vol = ad.get('available', 0)
+        source = ad.get('source', 'Unknown')
+        ad_type = ad.get('ad_type', 'SELL').upper()
+        
+        # Round to nearest integer for grouping
+        price_bin = int(round(price))
+        
+        if ad_type in ['SELL', 'SELL_AD']:
+            # Supply
+            if price_bin not in supply_by_price:
+                supply_by_price[price_bin] = {'BINANCE': 0, 'MEXC': 0, 'OKX': 0, 'total': 0}
+            supply_by_price[price_bin][source] = supply_by_price[price_bin].get(source, 0) + vol
+            supply_by_price[price_bin]['total'] += vol
+        else:
+            # Demand
+            if price_bin not in demand_by_price:
+                demand_by_price[price_bin] = {'BINANCE': 0, 'MEXC': 0, 'OKX': 0, 'total': 0}
+            demand_by_price[price_bin][source] = demand_by_price[price_bin].get(source, 0) + vol
+            demand_by_price[price_bin]['total'] += vol
+    
+    # Convert to sorted lists
+    supply_list = []
+    for price, data in sorted(supply_by_price.items()):
+        supply_list.append({
+            'price': price,
+            'BINANCE': data.get('BINANCE', 0),
+            'MEXC': data.get('MEXC', 0),
+            'OKX': data.get('OKX', 0),
+            'total': data['total']
+        })
+    
+    demand_list = []
+    for price, data in sorted(demand_by_price.items()):
+        demand_list.append({
+            'price': price,
+            'BINANCE': data.get('BINANCE', 0),
+            'MEXC': data.get('MEXC', 0),
+            'OKX': data.get('OKX', 0),
+            'total': data['total']
+        })
+    
+    return {'supply': supply_list, 'demand': demand_list}
+
 # --- HTML GENERATOR ---
 def update_website_html(stats, official, timestamp, current_ads, grouped_ads, peg, ai_summary=None, remittance_rates=None):
     prem = ((stats["median"] - official) / official) * 100 if official else 0
@@ -1076,6 +1146,15 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
         old_median = medians[0]
         price_change = stats["median"] - old_median
         price_change_pct = (price_change / old_median * 100) if old_median > 0 else 0
+    
+    # Calculate premiums for each historical point
+    premiums = []
+    for i in range(len(medians)):
+        if i < len(offs) and offs[i] > 0:
+            prem_val = ((medians[i] - offs[i]) / offs[i]) * 100
+            premiums.append(prem_val)
+        else:
+            premiums.append(0)
     
     arrow = "↗" if price_change > 0 else "↘" if price_change < 0 else "→"
     change_color = "#00C805" if price_change > 0 else "#FF3B30" if price_change < 0 else "#8E8E93"
@@ -1147,15 +1226,21 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
     
     chart_data_json = json.dumps(chart_data)
     
+    # History data with premiums
     history_data = {
         'dates': [d.isoformat() if hasattr(d, 'isoformat') else str(d) for d in dates] if dates else [],
         'medians': medians if medians else [],
-        'officials': [o if o else 0 for o in offs] if offs else []
+        'officials': [o if o else 0 for o in offs] if offs else [],
+        'premiums': premiums
     }
     history_data_json = json.dumps(history_data)
     
     volume_by_exchange = calculate_volume_by_exchange(recent_trades)
     trade_volume_json = json.dumps(volume_by_exchange)
+    
+    # Calculate market depth by price for stacked chart
+    market_depth = calculate_market_depth_by_price(current_ads, peg)
+    market_depth_json = json.dumps(market_depth)
     
     feed_html = generate_feed_html(recent_trades, peg)
     
@@ -1176,55 +1261,6 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
     overall_sells = trade_stats['overall_sells']
     overall_buy_volume = trade_stats['overall_buy_volume']
     overall_sell_volume = trade_stats['overall_sell_volume']
-    
-    # Volume chart HTML - only 3 exchanges
-    volume_chart_html = ""
-    if not volume_by_exchange or all(v['total'] == 0 for v in volume_by_exchange.values()):
-        volume_chart_html = """
-        <div style="text-align:center;padding:40px;color:var(--text-secondary)">
-            <div style="font-size:48px;margin-bottom:16px">📊</div>
-            <div style="font-size:16px;font-weight:600;margin-bottom:8px">No Volume Data Yet</div>
-            <div style="font-size:14px">Waiting for trade detection...</div>
-        </div>
-        """
-    else:
-        max_volume = max([v['total'] for v in volume_by_exchange.values()])
-        
-        for source in ['BINANCE', 'MEXC', 'OKX']:
-            data = volume_by_exchange.get(source, {'buy': 0, 'sell': 0, 'total': 0})
-            buy_pct = (data['buy'] / max_volume * 100) if max_volume > 0 else 0
-            sell_pct = (data['sell'] / max_volume * 100) if max_volume > 0 else 0
-            
-            if data['buy'] > 0 and buy_pct < 2:
-                buy_pct = 2
-            if data['sell'] > 0 and sell_pct < 2:
-                sell_pct = 2
-            
-            if source == 'BINANCE':
-                emoji, color = '🟡', '#F3BA2F'
-            elif source == 'MEXC':
-                emoji, color = '🔵', '#2E55E6'
-            else:
-                emoji, color = '🟣', '#A855F7'
-            
-            volume_chart_html += f"""
-            <div class="volume-row">
-                <div class="volume-source">
-                    <span style="font-size:20px">{emoji}</span>
-                    <span style="color:{color};font-weight:600">{source}</span>
-                </div>
-                <div class="volume-bars">
-                    <div class="volume-bar-group">
-                        <div class="volume-bar buy-bar" style="width:{buy_pct}%"></div>
-                        <span class="volume-label buy-label">${data['buy']:,.0f}</span>
-                    </div>
-                    <div class="volume-bar-group">
-                        <div class="volume-bar sell-bar" style="width:{sell_pct}%"></div>
-                        <span class="volume-label sell-label">${data['sell']:,.0f}</span>
-                    </div>
-                </div>
-            </div>
-            """
     
     # Generate ticker HTML with remittance rates
     ticker_html = ""
@@ -1280,6 +1316,18 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
         for risk in ai_summary.get('risk_factors', []):
             risks_html += f"<li style='margin-bottom:8px;color:#FF9500;'>{risk}</li>"
         
+        # Black market drivers
+        bm_drivers_html = ""
+        for driver in ai_summary.get('black_market_drivers', []):
+            bm_drivers_html += f"<li style='margin-bottom:8px;'>{driver}</li>"
+        
+        # Official rate factors
+        official_factors_html = ""
+        for factor in ai_summary.get('official_rate_factors', []):
+            official_factors_html += f"<li style='margin-bottom:8px;'>{factor}</li>"
+        
+        gap_explanation = ai_summary.get('gap_explanation', 'No explanation available')
+        
         # Get forecasts
         short_forecast = ai_summary.get('short_term_forecast', ai_summary.get('short_term_prediction', 'Not available'))
         medium_forecast = ai_summary.get('medium_term_forecast', 'Not available')
@@ -1308,6 +1356,29 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             <div style="background:var(--bg);padding:20px;border-radius:12px;margin-bottom:20px;">
                 <div style="font-size:16px;line-height:1.7;color:var(--text);">
                     {ai_summary.get('summary', 'Analysis not available.')}
+                </div>
+            </div>
+            
+            <!-- WHY THE GAP SECTION -->
+            <div style="background:linear-gradient(135deg, rgba(255,149,0,0.15), rgba(255,149,0,0.05));padding:20px;border-radius:12px;margin-bottom:20px;border:1px solid rgba(255,149,0,0.4);">
+                <div style="font-weight:700;color:var(--orange);margin-bottom:12px;font-size:18px;">📊 Why the {prem:.1f}% Gap Between Black Market & Official Rate?</div>
+                <div style="color:var(--text);line-height:1.7;font-size:15px;">{gap_explanation}</div>
+            </div>
+            
+            <!-- DRIVERS SECTION -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px;">
+                <div style="background:rgba(255,59,48,0.1);padding:20px;border-radius:12px;border:1px solid rgba(255,59,48,0.3);">
+                    <div style="font-weight:700;color:var(--red);margin-bottom:12px;font-size:16px;">🔴 Black Market Drivers</div>
+                    <ul style="margin:0;padding-left:20px;color:var(--text);line-height:1.6;">
+                        {bm_drivers_html if bm_drivers_html else '<li>High USD demand from businesses</li><li>Limited forex in official channels</li>'}
+                    </ul>
+                </div>
+                
+                <div style="background:rgba(52,199,89,0.1);padding:20px;border-radius:12px;border:1px solid rgba(52,199,89,0.3);">
+                    <div style="font-weight:700;color:#34C759;margin-bottom:12px;font-size:16px;">🏛️ Official Rate Factors</div>
+                    <ul style="margin:0;padding-left:20px;color:var(--text);line-height:1.6;">
+                        {official_factors_html if official_factors_html else '<li>NBE monetary policy</li><li>IMF program requirements</li>'}
+                    </ul>
                 </div>
             </div>
             
@@ -1587,6 +1658,29 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             .time-btn.active {{
                 background: var(--accent);
                 color: white;
+            }}
+            
+            .trend-btn {{
+                background: transparent;
+                border: 1px solid var(--border);
+                color: var(--text-secondary);
+                padding: 6px 14px;
+                border-radius: 8px;
+                cursor: pointer;
+                font-size: 13px;
+                font-weight: 600;
+                transition: all 0.2s ease;
+            }}
+            
+            .trend-btn:hover {{
+                background: var(--card-hover);
+                color: var(--text);
+            }}
+            
+            .trend-btn.active {{
+                background: var(--accent);
+                color: white;
+                border-color: var(--accent);
             }}
             
             .chart-card {{
@@ -2044,7 +2138,13 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                     </div>
                     
                     <div class="chart-card">
-                        <div class="chart-title">📈 24h Price Trend</div>
+                        <div class="chart-title">📈 Price Trend & Premium</div>
+                        <div style="display:flex;gap:8px;margin-bottom:15px;flex-wrap:wrap;">
+                            <button class="trend-btn active" data-trend="1h" onclick="filterTrend('1h')">1H</button>
+                            <button class="trend-btn" data-trend="1d" onclick="filterTrend('1d')">1D</button>
+                            <button class="trend-btn" data-trend="1w" onclick="filterTrend('1w')">1W</button>
+                            <button class="trend-btn" data-trend="all" onclick="filterTrend('all')">ALL</button>
+                        </div>
                         <div id="trendChart" class="plotly-chart"></div>
                     </div>
                     
@@ -2094,20 +2194,48 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                 </div>
             </div>
             
-            <!-- Volume Chart -->
-            <div class="volume-chart-panel">
-                <div class="volume-chart-title">24h Volume by Exchange (Buy vs Sell)</div>
-                <div class="volume-legend">
-                    <div class="volume-legend-item">
-                        <div class="volume-legend-box buy-bar"></div>
-                        <span>Buy Volume</span>
+            <!-- Live Market Insight - Supply & Demand by Price -->
+            <div class="chart-card" style="margin:20px 0;">
+                <div class="chart-title">📊 Live Market Insight</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:30px;">
+                    <!-- Supply (Sell Orders) -->
+                    <div>
+                        <div style="font-size:16px;font-weight:700;color:var(--green);margin-bottom:15px;">Total Market Supply (Sell Orders)</div>
+                        <div style="display:grid;grid-template-columns:120px 80px 1fr;gap:8px;font-size:13px;color:var(--text-secondary);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);">
+                            <span>USD Supply</span>
+                            <span>At Price</span>
+                            <span>Volume by Exchange</span>
+                        </div>
+                        <div id="supplyChart" style="max-height:400px;overflow-y:auto;"></div>
                     </div>
-                    <div class="volume-legend-item">
-                        <div class="volume-legend-box sell-bar"></div>
-                        <span>Sell Volume</span>
+                    
+                    <!-- Demand (Buy Orders) -->
+                    <div>
+                        <div style="font-size:16px;font-weight:700;color:var(--red);margin-bottom:15px;">Total Market Demand (Buy Orders)</div>
+                        <div style="display:grid;grid-template-columns:120px 80px 1fr;gap:8px;font-size:13px;color:var(--text-secondary);margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border);">
+                            <span>USD Demand</span>
+                            <span>At Price</span>
+                            <span>Volume by Exchange</span>
+                        </div>
+                        <div id="demandChart" style="max-height:400px;overflow-y:auto;"></div>
                     </div>
                 </div>
-                {volume_chart_html}
+                
+                <!-- Legend -->
+                <div style="display:flex;justify-content:center;gap:24px;margin-top:20px;padding-top:15px;border-top:1px solid var(--border);">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <div style="width:16px;height:16px;background:#F3BA2F;border-radius:4px;"></div>
+                        <span style="font-size:13px;">🟡 Binance</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <div style="width:16px;height:16px;background:#2E55E6;border-radius:4px;"></div>
+                        <span style="font-size:13px;">🔵 MEXC</span>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <div style="width:16px;height:16px;background:#A855F7;border-radius:4px;"></div>
+                        <span style="font-size:13px;">🟣 OKX</span>
+                    </div>
+                </div>
             </div>
             
             <!-- Transaction Statistics -->
@@ -2162,7 +2290,7 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             
             <footer>
                 Official Rate: {official:.2f} ETB | Last Update: {timestamp} UTC<br>
-                v42.9 AI-Powered • Remittance Rates in Ticker • Gemini Analysis 🤖✅
+                v42.9 AI-Powered • Market Depth by Price • Premium Tracking 🤖📊
             </footer>
         </div>
         
@@ -2170,10 +2298,254 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
             const allTrades = {json.dumps(recent_trades)};
             let currentPeriod = 'live';
             let currentSource = 'all';
+            let currentTrendPeriod = '1d';
             
             const chartData = {chart_data_json};
             const historyData = {history_data_json};
             const tradeVolume = {trade_volume_json};
+            const marketDepth = {market_depth_json};
+            
+            // Render Market Depth (Supply/Demand by Price)
+            function renderMarketDepth() {{
+                const colors = {{
+                    'BINANCE': '#F3BA2F',
+                    'MEXC': '#2E55E6', 
+                    'OKX': '#A855F7'
+                }};
+                
+                // Render Supply (Sell Orders) - Green side
+                const supplyContainer = document.getElementById('supplyChart');
+                let supplyHtml = '';
+                const supplyData = marketDepth.supply || [];
+                const maxSupply = Math.max(...supplyData.map(d => d.total), 1);
+                
+                supplyData.slice(0, 15).forEach(item => {{
+                    const binancePct = (item.BINANCE / maxSupply * 100) || 0;
+                    const mexcPct = (item.MEXC / maxSupply * 100) || 0;
+                    const okxPct = (item.OKX / maxSupply * 100) || 0;
+                    
+                    supplyHtml += `
+                        <div style="display:grid;grid-template-columns:120px 80px 1fr;gap:8px;align-items:center;margin-bottom:8px;">
+                            <span style="font-weight:600;color:var(--text);">$${{item.total.toLocaleString(undefined, {{maximumFractionDigits:0}})}}</span>
+                            <span style="color:var(--green);font-weight:600;">${{item.price}} Br</span>
+                            <div style="display:flex;height:20px;border-radius:4px;overflow:hidden;background:var(--border);">
+                                ${{item.BINANCE > 0 ? `<div style="width:${{binancePct}}%;background:#F3BA2F;" title="Binance: $${{item.BINANCE.toLocaleString()}}"></div>` : ''}}
+                                ${{item.MEXC > 0 ? `<div style="width:${{mexcPct}}%;background:#2E55E6;" title="MEXC: $${{item.MEXC.toLocaleString()}}"></div>` : ''}}
+                                ${{item.OKX > 0 ? `<div style="width:${{okxPct}}%;background:#A855F7;" title="OKX: $${{item.OKX.toLocaleString()}}"></div>` : ''}}
+                            </div>
+                        </div>
+                    `;
+                }});
+                
+                if (supplyData.length === 0) {{
+                    supplyHtml = '<div style="text-align:center;padding:20px;color:var(--text-secondary);">No supply data</div>';
+                }}
+                supplyContainer.innerHTML = supplyHtml;
+                
+                // Render Demand (Buy Orders) - Red side
+                const demandContainer = document.getElementById('demandChart');
+                let demandHtml = '';
+                const demandData = marketDepth.demand || [];
+                const maxDemand = Math.max(...demandData.map(d => d.total), 1);
+                
+                demandData.slice(0, 15).forEach(item => {{
+                    const binancePct = (item.BINANCE / maxDemand * 100) || 0;
+                    const mexcPct = (item.MEXC / maxDemand * 100) || 0;
+                    const okxPct = (item.OKX / maxDemand * 100) || 0;
+                    
+                    demandHtml += `
+                        <div style="display:grid;grid-template-columns:120px 80px 1fr;gap:8px;align-items:center;margin-bottom:8px;">
+                            <span style="font-weight:600;color:var(--text);">$${{item.total.toLocaleString(undefined, {{maximumFractionDigits:0}})}}</span>
+                            <span style="color:var(--red);font-weight:600;">${{item.price}} Br</span>
+                            <div style="display:flex;height:20px;border-radius:4px;overflow:hidden;background:var(--border);">
+                                ${{item.BINANCE > 0 ? `<div style="width:${{binancePct}}%;background:#F3BA2F;" title="Binance: $${{item.BINANCE.toLocaleString()}}"></div>` : ''}}
+                                ${{item.MEXC > 0 ? `<div style="width:${{mexcPct}}%;background:#2E55E6;" title="MEXC: $${{item.MEXC.toLocaleString()}}"></div>` : ''}}
+                                ${{item.OKX > 0 ? `<div style="width:${{okxPct}}%;background:#A855F7;" title="OKX: $${{item.OKX.toLocaleString()}}"></div>` : ''}}
+                            </div>
+                        </div>
+                    `;
+                }});
+                
+                if (demandData.length === 0) {{
+                    demandHtml = '<div style="text-align:center;padding:20px;color:var(--text-secondary);">No demand data</div>';
+                }}
+                demandContainer.innerHTML = demandHtml;
+            }}
+            
+            // Filter trend chart by time period
+            function filterTrend(period) {{
+                currentTrendPeriod = period;
+                
+                document.querySelectorAll('.trend-btn').forEach(btn => {{
+                    btn.classList.remove('active');
+                }});
+                document.querySelector(`[data-trend="${{period}}"]`).classList.add('active');
+                
+                renderTrendChart(period);
+            }}
+            
+            function renderTrendChart(period) {{
+                const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+                const bgColor = isDark ? '#1C1C1E' : '#ffffff';
+                const textColor = isDark ? '#ffffff' : '#1a1a1a';
+                const gridColor = isDark ? '#38383A' : '#e0e0e0';
+                
+                if (!historyData.dates || historyData.dates.length < 2) {{
+                    document.getElementById('trendChart').innerHTML = '<div style="padding:60px;text-align:center;color:var(--text-secondary)"><div style="font-size:48px;margin-bottom:16px">📈</div><div>Collecting trend data...</div></div>';
+                    return;
+                }}
+                
+                // Filter data based on period
+                let filteredDates = historyData.dates;
+                let filteredMedians = historyData.medians;
+                let filteredOfficials = historyData.officials;
+                let filteredPremiums = historyData.premiums || [];
+                
+                const now = new Date();
+                let cutoffTime;
+                
+                switch(period) {{
+                    case '1h':
+                        cutoffTime = new Date(now - 60 * 60 * 1000);
+                        break;
+                    case '1d':
+                        cutoffTime = new Date(now - 24 * 60 * 60 * 1000);
+                        break;
+                    case '1w':
+                        cutoffTime = new Date(now - 7 * 24 * 60 * 60 * 1000);
+                        break;
+                    case 'all':
+                    default:
+                        cutoffTime = new Date(0);
+                }}
+                
+                // Filter arrays
+                const indices = [];
+                filteredDates.forEach((d, i) => {{
+                    if (new Date(d) >= cutoffTime) indices.push(i);
+                }});
+                
+                if (indices.length < 2) {{
+                    document.getElementById('trendChart').innerHTML = '<div style="padding:60px;text-align:center;color:var(--text-secondary)"><div style="font-size:48px;margin-bottom:16px">📈</div><div>Not enough data for this period</div></div>';
+                    return;
+                }}
+                
+                const dates = indices.map(i => filteredDates[i]);
+                const medians = indices.map(i => filteredMedians[i]);
+                const officials = indices.map(i => filteredOfficials[i]);
+                const premiums = indices.map(i => filteredPremiums[i] || 0);
+                
+                const lastIdx = medians.length - 1;
+                const lastMedian = medians[lastIdx];
+                const lastOfficial = officials[lastIdx] || 127;
+                const lastPremium = premiums[lastIdx] || 0;
+                
+                const trendTraces = [];
+                
+                // Official rate (base line)
+                if (officials && officials.some(v => v > 0)) {{
+                    trendTraces.push({{
+                        type: 'scatter',
+                        mode: 'lines',
+                        name: 'Official Rate',
+                        x: dates,
+                        y: officials,
+                        line: {{ color: '#FF9500', width: 2, dash: 'dot' }},
+                        hovertemplate: '<b>Official:</b> %{{y:.2f}} ETB<extra></extra>'
+                    }});
+                }}
+                
+                // Black market rate with fill
+                trendTraces.push({{
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Black Market Rate',
+                    x: dates,
+                    y: medians,
+                    line: {{ color: '#00ff9d', width: 3 }},
+                    fill: 'tonexty',
+                    fillcolor: 'rgba(0, 255, 157, 0.15)',
+                    hovertemplate: '<b>Black Market:</b> %{{y:.2f}} ETB<extra></extra>'
+                }});
+                
+                // Premium on secondary axis
+                trendTraces.push({{
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    name: 'Premium %',
+                    x: dates,
+                    y: premiums,
+                    line: {{ color: '#FF3B30', width: 2, dash: 'dash' }},
+                    marker: {{ size: 4 }},
+                    yaxis: 'y2',
+                    hovertemplate: '<b>Premium:</b> %{{y:.1f}}%<extra></extra>'
+                }});
+                
+                const allYValues = [...medians, ...officials.filter(v => v > 0)];
+                const minY = Math.floor(Math.min(...allYValues) / 10) * 10 - 10;
+                const maxY = Math.ceil(Math.max(...allYValues) / 10) * 10 + 20;
+                
+                const maxPremium = Math.max(...premiums) + 5;
+                
+                const trendLayout = {{
+                    paper_bgcolor: bgColor,
+                    plot_bgcolor: bgColor,
+                    font: {{ color: textColor, family: '-apple-system, BlinkMacSystemFont, sans-serif' }},
+                    showlegend: true,
+                    legend: {{ orientation: 'h', y: -0.18 }},
+                    margin: {{ l: 60, r: 60, t: 20, b: 70 }},
+                    xaxis: {{
+                        gridcolor: gridColor,
+                        tickformat: period === '1h' ? '%H:%M' : '%m/%d %H:%M'
+                    }},
+                    yaxis: {{
+                        title: 'Rate (ETB)',
+                        gridcolor: gridColor,
+                        zerolinecolor: gridColor,
+                        range: [minY, maxY],
+                        dtick: 10
+                    }},
+                    yaxis2: {{
+                        title: 'Premium (%)',
+                        overlaying: 'y',
+                        side: 'right',
+                        showgrid: false,
+                        range: [0, maxPremium],
+                        ticksuffix: '%'
+                    }},
+                    hovermode: 'x unified',
+                    annotations: [
+                        {{
+                            x: dates[lastIdx],
+                            y: lastMedian,
+                            xanchor: 'left',
+                            yanchor: 'middle',
+                            text: '<b>' + lastMedian.toFixed(1) + '</b>',
+                            font: {{ color: '#00ff9d', size: 12 }},
+                            showarrow: false,
+                            xshift: 10,
+                            bgcolor: 'rgba(0,0,0,0.7)',
+                            borderpad: 4
+                        }},
+                        {{
+                            x: dates[lastIdx],
+                            y: lastPremium,
+                            xanchor: 'left',
+                            yanchor: 'middle',
+                            xref: 'x',
+                            yref: 'y2',
+                            text: '<b>' + lastPremium.toFixed(1) + '%</b>',
+                            font: {{ color: '#FF3B30', size: 11 }},
+                            showarrow: false,
+                            xshift: 10,
+                            bgcolor: 'rgba(0,0,0,0.7)',
+                            borderpad: 4
+                        }}
+                    ]
+                }};
+                
+                Plotly.newPlot('trendChart', trendTraces, trendLayout, {{responsive: true, displayModeBar: false}});
+            }}
             
             function initCharts() {{
                 const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
@@ -2261,86 +2633,11 @@ def update_website_html(stats, official, timestamp, current_ads, grouped_ads, pe
                 
                 Plotly.newPlot('priceDistChart', scatterTraces, scatterLayout, {{responsive: true, displayModeBar: false}});
                 
-                if (historyData.dates && historyData.dates.length > 1) {{
-                    const lastIdx = historyData.medians.length - 1;
-                    const lastMedian = historyData.medians[lastIdx];
-                    const lastOfficial = historyData.officials[lastIdx] || 127;
-                    
-                    const spreads = historyData.medians.map((m, i) => {{
-                        const off = historyData.officials[i] || 127;
-                        return m - off;
-                    }});
-                    
-                    const trendTraces = [
-                        {{
-                            type: 'scatter',
-                            mode: 'lines',
-                            name: 'Black Market Rate',
-                            x: historyData.dates,
-                            y: historyData.medians,
-                            line: {{ color: '#00ff9d', width: 3 }},
-                            fill: 'tonexty',
-                            fillcolor: 'rgba(0, 255, 157, 0.15)',
-                            hovertemplate: '<b>Black Market:</b> %{{y:.2f}} ETB<extra></extra>'
-                        }}
-                    ];
-                    
-                    if (historyData.officials && historyData.officials.some(v => v > 0)) {{
-                        trendTraces.unshift({{
-                            type: 'scatter',
-                            mode: 'lines',
-                            name: 'Official Rate',
-                            x: historyData.dates,
-                            y: historyData.officials,
-                            line: {{ color: '#FF9500', width: 2, dash: 'dot' }},
-                            hovertemplate: '<b>Official:</b> %{{y:.2f}} ETB<extra></extra>'
-                        }});
-                    }}
-                    
-                    const allYValues = [...historyData.medians, ...historyData.officials.filter(v => v > 0)];
-                    const minY = Math.floor(Math.min(...allYValues) / 10) * 10 - 10;
-                    const maxY = Math.ceil(Math.max(...allYValues) / 10) * 10 + 20;
-                    
-                    const trendLayout = {{
-                        paper_bgcolor: bgColor,
-                        plot_bgcolor: bgColor,
-                        font: {{ color: textColor, family: '-apple-system, BlinkMacSystemFont, sans-serif' }},
-                        showlegend: true,
-                        legend: {{ orientation: 'h', y: -0.18 }},
-                        margin: {{ l: 60, r: 60, t: 40, b: 70 }},
-                        xaxis: {{
-                            title: 'Time',
-                            gridcolor: gridColor,
-                            tickformat: '%H:%M'
-                        }},
-                        yaxis: {{
-                            title: 'Rate (ETB)',
-                            gridcolor: gridColor,
-                            zerolinecolor: gridColor,
-                            range: [minY, maxY],
-                            dtick: 10
-                        }},
-                        hovermode: 'x unified',
-                        annotations: [
-                            {{
-                                x: historyData.dates[lastIdx],
-                                y: lastMedian,
-                                xanchor: 'left',
-                                yanchor: 'middle',
-                                text: '<b>' + lastMedian.toFixed(1) + '</b>',
-                                font: {{ color: '#00ff9d', size: 12 }},
-                                showarrow: false,
-                                xshift: 10,
-                                bgcolor: 'rgba(0,0,0,0.7)',
-                                borderpad: 4
-                            }}
-                        ]
-                    }};
-                    
-                    Plotly.newPlot('trendChart', trendTraces, trendLayout, {{responsive: true, displayModeBar: false}});
-                }} else {{
-                    document.getElementById('trendChart').innerHTML = '<div style="padding:60px;text-align:center;color:var(--text-secondary)"><div style="font-size:48px;margin-bottom:16px">📈</div><div>Collecting trend data...</div></div>';
-                }}
+                // Render trend chart with default period
+                renderTrendChart(currentTrendPeriod);
+                
+                // Render market depth
+                renderMarketDepth();
             }}
             
             document.addEventListener('DOMContentLoaded', function() {{
